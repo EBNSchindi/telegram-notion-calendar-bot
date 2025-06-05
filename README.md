@@ -2,6 +2,8 @@
 
 Ein Python-basierter Telegram Bot für Kalender-Management mit Notion als Backend. Entwickelt mit Test-Driven Development (TDD) und iterativer Entwicklung.
 
+> 🚀 **Version 1.0.0** | 📚 [Dokumentation](docs/) | 🏗️ [Architektur](ARCHITECTURE.md) | 🔧 [Entwicklung](DEVELOPMENT.md)
+
 ## ✨ Features
 
 - 📅 Termine über Telegram-Commands erstellen
