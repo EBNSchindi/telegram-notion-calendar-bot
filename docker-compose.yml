@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  calendar-bot:
+    build: .
+    container_name: calendar-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  bot-data:
