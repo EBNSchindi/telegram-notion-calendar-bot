@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime, timedelta
-from notion_client.errors import APIError
+from datetime import datetime, timedelta, timezone
+from notion_client.errors import APIResponseError
 from src.services.notion_service import NotionService
 from src.models.appointment import Appointment
 
@@ -20,7 +20,7 @@ class TestNotionService:
     async def test_create_appointment_success(self, notion_service, mock_notion_client):
         """Test successful appointment creation."""
         # Setup
-        future_date = datetime.utcnow() + timedelta(hours=1)
+        future_date = datetime.now(timezone.utc) + timedelta(hours=1)
         appointment = Appointment(
             title="Test Meeting",
             date=future_date,
@@ -47,16 +47,16 @@ class TestNotionService:
     async def test_create_appointment_api_error(self, notion_service, mock_notion_client):
         """Test appointment creation with API error."""
         # Setup
-        future_date = datetime.utcnow() + timedelta(hours=1)
+        future_date = datetime.now(timezone.utc) + timedelta(hours=1)
         appointment = Appointment(
             title="Test Meeting",
             date=future_date
         )
         
-        mock_notion_client.pages.create.side_effect = APIError("API Error")
+        mock_notion_client.pages.create.side_effect = APIResponseError("API Error", response=Mock(), body={})
         
         # Execute & Assert
-        with pytest.raises(APIError):
+        with pytest.raises(APIResponseError):
             await notion_service.create_appointment(appointment)
     
     @pytest.mark.asyncio
@@ -67,6 +67,7 @@ class TestNotionService:
             "results": [
                 {
                     "id": "page-1",
+                    "created_time": "2024-12-20T10:00:00+01:00",
                     "properties": {
                         "Title": {
                             "title": [
@@ -91,6 +92,7 @@ class TestNotionService:
                 },
                 {
                     "id": "page-2",
+                    "created_time": "2024-12-20T10:00:00+01:00",
                     "properties": {
                         "Title": {
                             "title": [
@@ -126,7 +128,7 @@ class TestNotionService:
         
         mock_notion_client.databases.query.assert_called_once_with(
             database_id="test_database_id",
-            sorts=[{"property": "Date", "direction": "ascending"}],
+            sorts=[{"property": "Datum", "direction": "ascending"}],
             page_size=10
         )
     
@@ -148,17 +150,17 @@ class TestNotionService:
     async def test_get_appointments_api_error(self, notion_service, mock_notion_client):
         """Test appointments retrieval with API error."""
         # Setup
-        mock_notion_client.databases.query.side_effect = APIError("API Error")
+        mock_notion_client.databases.query.side_effect = APIResponseError("API Error", response=Mock(), body={})
         
         # Execute & Assert
-        with pytest.raises(APIError):
+        with pytest.raises(APIResponseError):
             await notion_service.get_appointments()
     
     @pytest.mark.asyncio
     async def test_update_appointment_success(self, notion_service, mock_notion_client):
         """Test successful appointment update."""
         # Setup
-        future_date = datetime.utcnow() + timedelta(hours=1)
+        future_date = datetime.now(timezone.utc) + timedelta(hours=1)
         appointment = Appointment(
             title="Updated Meeting",
             date=future_date
@@ -209,7 +211,7 @@ class TestNotionService:
     async def test_test_connection_failure(self, notion_service, mock_notion_client):
         """Test connection test failure."""
         # Setup
-        mock_notion_client.databases.retrieve.side_effect = APIError("Connection failed")
+        mock_notion_client.databases.retrieve.side_effect = APIResponseError("Connection failed", response=Mock(), body={})
         
         # Execute
         result = await notion_service.test_connection()

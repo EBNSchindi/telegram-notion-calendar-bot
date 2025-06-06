@@ -32,6 +32,9 @@ data/
 *.log
 bot.log
 
+# Configuration with secrets
+users_config.json
+
 # Docker
 docker-compose.override.yml
 

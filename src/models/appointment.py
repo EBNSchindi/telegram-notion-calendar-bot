@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 import pytz
 
 
@@ -13,18 +13,20 @@ class Appointment(BaseModel):
     location: Optional[str] = Field(None, max_length=200, description="Optional location")
     tags: Optional[List[str]] = Field(None, description="Optional tags")
     notion_page_id: Optional[str] = Field(None, description="Notion page ID after creation")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
     
-    @validator('date')
+    @field_validator('date')
+    @classmethod
     def validate_date(cls, v):
         """Validate that the appointment date is in the future."""
         # Only validate future dates for new appointments (not when parsing from Notion)
         # Skip validation if this is from a Notion page (has timezone info)
-        if v.tzinfo is None and v <= datetime.utcnow():
+        if v.tzinfo is None and v <= datetime.now(timezone.utc):
             raise ValueError("Appointment date must be in the future")
         return v
     
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def validate_title(cls, v):
         """Validate title is not empty after stripping."""
         if not v.strip():
@@ -95,14 +97,16 @@ class Appointment(BaseModel):
         """Create appointment from Notion page data."""
         properties = page['properties']
         
-        # Extract title (from "Name" field)
-        title_prop = properties.get('Name', {})
+        # Extract title (from "Name" or "Title" field for backward compatibility)
+        title_prop = properties.get('Name', properties.get('Title', {}))
         title = ""
-        if title_prop.get('title'):
+        if title_prop.get('title') and title_prop['title']:
             title = title_prop['title'][0]['text']['content']
         
-        # Extract date (from "Datum" field)
-        date_prop = properties.get('Datum', {})
+        # Extract date (from "Datum" or "Date" field for backward compatibility)
+        date_prop = properties.get('Datum', properties.get('Date', {}))
+        if not date_prop or 'date' not in date_prop:
+            raise ValueError(f"Missing or invalid date field in Notion page")
         date_str = date_prop['date']['start']
         date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         

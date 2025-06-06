@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "telegram_user_id": 123456789,
+      "telegram_username": "user1",
+      "notion_api_key": "secret_xxx_your_notion_api_key_1",
+      "notion_database_id": "your_private_database_id_1",
+      "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
+      "shared_notion_database_id": "your_shared_database_id",
+      "timezone": "Europe/Berlin",
+      "language": "de",
+      "reminder_time": "08:00",
+      "reminder_enabled": true
+    },
+    {
+      "telegram_user_id": 987654321,
+      "telegram_username": "user2",
+      "notion_api_key": "secret_xxx_your_notion_api_key_2",
+      "notion_database_id": "your_private_database_id_2",
+      "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
+      "shared_notion_database_id": "your_shared_database_id",
+      "timezone": "Europe/Berlin",
+      "language": "de",
+      "reminder_time": "08:00",
+      "reminder_enabled": true
+    }
+  ]
+}

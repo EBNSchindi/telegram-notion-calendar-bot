@@ -1,9 +1,10 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union
 from notion_client import Client
 from notion_client.errors import APIResponseError
 from src.models.appointment import Appointment
 from config.settings import Settings
+from config.user_config import UserConfig
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,37 @@ logger = logging.getLogger(__name__)
 class NotionService:
     """Service for interacting with Notion API."""
     
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.client = Client(auth=settings.notion_api_key)
-        self.database_id = settings.notion_database_id
+    def __init__(self, settings: Optional[Settings] = None, 
+                 notion_api_key: Optional[str] = None,
+                 database_id: Optional[str] = None):
+        """
+        Initialize NotionService with either Settings object or direct parameters.
+        
+        Args:
+            settings: Settings object (for backward compatibility)
+            notion_api_key: Direct API key (for multi-user support)
+            database_id: Direct database ID (for multi-user support)
+        """
+        if settings:
+            # Backward compatibility
+            self.settings = settings
+            self.client = Client(auth=settings.notion_api_key)
+            self.database_id = settings.notion_database_id
+        else:
+            # Multi-user support
+            if not notion_api_key or not database_id:
+                raise ValueError("notion_api_key and database_id are required")
+            self.settings = None
+            self.client = Client(auth=notion_api_key)
+            self.database_id = database_id
+    
+    @classmethod
+    def from_user_config(cls, user_config: UserConfig) -> 'NotionService':
+        """Create NotionService from UserConfig."""
+        return cls(
+            notion_api_key=user_config.notion_api_key,
+            database_id=user_config.notion_database_id
+        )
     
     async def create_appointment(self, appointment: Appointment) -> str:
         """
@@ -30,7 +58,7 @@ class NotionService:
             APIResponseError: If Notion API request fails
         """
         try:
-            properties = appointment.to_notion_properties(self.settings.timezone)
+            properties = appointment.to_notion_properties(self.settings.timezone if self.settings else 'Europe/Berlin')
             
             response = self.client.pages.create(
                 parent={"database_id": self.database_id},
@@ -96,7 +124,7 @@ class NotionService:
             bool: True if successful
         """
         try:
-            properties = appointment.to_notion_properties(self.settings.timezone)
+            properties = appointment.to_notion_properties(self.settings.timezone if self.settings else 'Europe/Berlin')
             
             self.client.pages.update(
                 page_id=page_id,

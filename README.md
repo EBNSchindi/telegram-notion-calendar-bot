@@ -1,209 +1,344 @@
-# Calendar Telegram Bot mit Notion Integration
+# 🚀 Enhanced Telegram Notion Calendar Bot
 
-Ein Python-basierter Telegram Bot für Kalender-Management mit Notion als Backend. Entwickelt mit Test-Driven Development (TDD) und iterativer Entwicklung.
-
-> 🚀 **Version 1.0.0** | 📚 [Dokumentation](docs/) | 🏗️ [Architektur](ARCHITECTURE.md) | 🔧 [Entwicklung](DEVELOPMENT.md)
+Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Support**, **kombinierten Datenbanken**, **visuellem Menü** und **intelligenter Wochentag-Erkennung**.
 
 ## ✨ Features
 
-- 📅 Termine über Telegram-Commands erstellen
-- 📊 Termine in Notion-Datenbank speichern und verwalten
-- 🔍 Termine anzeigen (heute, alle kommenden)
-- 🌍 Timezone-Unterstützung (Standard: Europe/Berlin)
-- 🐳 Docker-basierte Bereitstellung
-- 🧪 Umfassende Test-Abdeckung
-- 🔒 Sichere Konfiguration über Umgebungsvariablen
+### 🎛 **Visuelles Hauptmenü**
+- Intuitive Bedienung mit Inline-Buttons
+- Schneller Zugriff auf alle Funktionen
+- Automatische Menü-Öffnung beim Chat-Start
+- ForceReply für einfache Terminerfassung
 
-## 🚀 Quick Start
+### 👥 **Multi-User & Dual-Database Support**
+- **Private Datenbank**: Persönliche Termine pro Nutzer
+- **Gemeinsame Datenbank**: Termine für alle Nutzer sichtbar
+- Automatische Kombination beider Datenquellen
+- Individuelle Konfiguration pro Benutzer
 
-### 1. Repository setup
+### 🗓 **Intelligente Datums- und Zeitverarbeitung**
+- **Wochentag-Erkennung**: `Sonntag`, `Montag`, `Freitag` → automatisch nächster Termin
+- **Deutsch**: `16 Uhr`, `halb 3`, `viertel vor 5`
+- **English**: `4 PM`, `quarter past 2`, `half past 3`, `Monday`, `Sunday`
+- **Standard**: `14:30`, `14.30`, `1430`
+- **Relativ**: `heute`, `morgen`, `übermorgen`
+- Robuste Fehlerbehandlung
+
+### 📨 **Intelligente Erinnerungen**
+- Kombiniert Termine aus beiden Datenbanken
+- Kennzeichnung der Terminquelle (👤 privat / 🌐 gemeinsam)
+- Konfigurierbare Erinnerungszeit
+- Vorschau-Funktion
+
+### 🤖 **Bot-Kommandos & Menü**
+- Automatisches Kommando-Menü in Telegram
+- `/start` öffnet direkt das Hauptmenü
+- Alle Befehle über Bot-Menü verfügbar
+
+## 📱 Hauptmenü
+
+Beim Start (`/start`) erscheint ein interaktives Menü:
+
+```
+📅 Heutige Termine    🗓️ Termine für morgen
+📋 Alle anstehenden   ➕ Neuen Termin hinzufügen  
+⚙️ Erinnerungen      ❓ Hilfe
+```
+
+## ⚙️ Installation & Konfiguration
+
+### 1. Grundsetup
 ```bash
 git clone <repository-url>
-cd calendar-bot-app
-make dev  # Installiert Dependencies
+cd telegram-notion-calendar-bot
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# oder venv\Scripts\activate  # Windows
+pip install -r requirements.txt
 ```
 
-### 2. Notion Integration einrichten
+### 2. Umgebungsvariablen (.env)
+```env
+# Telegram Bot Token (für alle Nutzer gleich)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+```
+
+### 3. Benutzerkonfiguration (users_config.json)
+```json
+{
+  "users": [
+    {
+      "telegram_user_id": 123456789,
+      "telegram_username": "user1",
+      "notion_api_key": "secret_private_api_key_user1",
+      "notion_database_id": "private_database_id_user1",
+      "shared_notion_api_key": "secret_shared_api_key",
+      "shared_notion_database_id": "shared_database_id",
+      "timezone": "Europe/Berlin",
+      "language": "de",
+      "reminder_time": "08:00",
+      "reminder_enabled": true
+    }
+  ]
+}
+```
+
+### 4. Bot starten
 ```bash
-make setup-notion  # Zeigt detaillierte Anweisungen
+# Enhanced Version mit allen Features
+python src/bot.py
+
+# oder mit Skript
+./run_bot.sh
 ```
 
-### 3. Telegram Bot erstellen
-1. Schreibe [@BotFather](https://t.me/botfather) auf Telegram
-2. Verwende `/newbot` und folge den Anweisungen
-3. Kopiere den Bot Token
+## 📋 Befehle & Nutzung
 
-### 4. Konfiguration
+### Hauptbefehle
+| Befehl | Beschreibung |
+|--------|-------------|
+| `/start` | Hauptmenü anzeigen |
+| `/menu` | Menü anzeigen (Alias) |
+| `/help` | Ausführliche Hilfe |
+| `/today` | Heutige Termine (👤 + 🌐) |
+| `/tomorrow` | Morgige Termine (👤 + 🌐) |
+| `/list` | Alle kommenden Termine |
+
+### Termine erstellen
 ```bash
-cp .env.example .env
-# Fülle .env mit deinen API Keys aus:
-# TELEGRAM_BOT_TOKEN=dein_bot_token
-# NOTION_API_KEY=dein_notion_token  
-# NOTION_DATABASE_ID=deine_database_id
+/add <Datum> <Zeit> <Titel> [Beschreibung]
 ```
 
-### 5. Testen
+**Neue Beispiele mit Wochentag-Erkennung:**
 ```bash
-make test  # Alle Tests ausführen
+# Wochentage (automatisch nächster Termin)
+/add Sonntag 17 Uhr Sasi
+/add Montag 9 Uhr Meeting
+/add Freitag 14:30 Besprechung
+
+# Deutsch
+/add morgen 16 Uhr Meeting
+/add heute halb 10 Frühstück
+/add 25.12.2024 viertel vor 8 Weihnachtsfeier
+
+# English
+/add Sunday 4 PM Meeting
+/add Monday quarter past 9 Breakfast
+/add Friday half past 2 Team Call
+
+# Standard
+/add morgen 14:30 Besprechung
+/add heute 1430 Termin
 ```
 
-### 6. Bot starten
+### Über das Menü
+1. Klicke "➕ Neuen Termin hinzufügen"
+2. Gib deinen Termin ein (ohne `/add`): `Sonntag 17 Uhr Sasi`
+3. Der Bot erkennt automatisch alle Formate
+
+### Erinnerungen verwalten
 ```bash
-make run-local  # Lokal ausführen
-# oder
-make docker-run  # Mit Docker
+/reminder              # Aktuelle Einstellungen
+/reminder on           # Aktivieren
+/reminder off          # Deaktivieren
+/reminder time 09:00   # Zeit ändern
+/reminder test         # Test senden
+/reminder preview      # Vorschau anzeigen
 ```
 
-## 🤖 Bot-Befehle
+## 🗂 Datenbank-Setup
 
-### Grundlegende Befehle
-- `/start` - Bot starten und Verbindungsstatus prüfen
-- `/help` - Hilfe und Beispiele anzeigen
+### Private Datenbank (pro Nutzer)
+Jeder Nutzer benötigt eine eigene Notion-Datenbank mit:
 
-### Termine verwalten
-- `/add <datum> <zeit> <titel> [beschreibung]` - Neuen Termin erstellen
-- `/today` - Heutige Termine anzeigen  
-- `/list` - Alle kommenden Termine anzeigen
+| Property | Type | Erforderlich |
+|----------|------|-------------|
+| Title | Title | ✅ |
+| Datum | Date | ✅ |
+| Beschreibung | Text | ❌ |
+| Created | Date | ✅ |
 
-### Beispiele
-```
-/add morgen 14:00 Meeting Team-Besprechung
-/add heute 15:30 Arzttermin Wichtiger Checkup
-/add 25.12.2024 18:00 Weihnachtsfeier Familie
-```
+### Gemeinsame Datenbank
+Eine zentrale Datenbank für alle Nutzer mit derselben Struktur.
 
-### Unterstützte Datum-Formate
-- `heute`, `today` - Heutiges Datum
-- `morgen`, `tomorrow` - Morgiges Datum  
-- `25.12.2024` - Absolutes Datum (DD.MM.YYYY)
-- `2024-12-25` - ISO-Format (YYYY-MM-DD)
+## 🎯 Features im Detail
 
-### Zeit-Formate
-- `14:00` oder `14.00` - 24-Stunden Format
-
-## 🧪 Entwicklung & Testing
-
-### Test-Driven Development
-Das Projekt folgt TDD-Prinzipien mit umfassender Test-Abdeckung:
-
+### Intelligente Wochentag-Erkennung
 ```bash
-make test              # Alle Tests
-make test-unit         # Nur Unit Tests  
-make test-integration  # Nur Integration Tests
-make test-watch        # Tests im Watch-Modus
+# Heutiger Tag: Freitag
+/add Sonntag 17 Uhr Sasi        → Nächster Sonntag
+/add Montag 9 Uhr Meeting       → Nächster Montag  
+/add Freitag 14 Uhr Termin      → Nächster Freitag (nächste Woche)
+```
+
+Unterstützte Wochentage:
+- **Deutsch**: Montag, Dienstag, Mittwoch, Donnerstag, Freitag, Samstag, Sonntag
+- **English**: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+
+### Kombinierte Terminanzeige
+```
+📋 Termine für heute (06.06.2025):
+
+📅 Heute (06.06.2025)
+👤 09:00 - Privater Termin
+   Persönliche Notiz
+🌐 14:00 - Team Meeting
+   Gemeinsamer Termin für alle
+
+👤 Private Termine | 🌐 Gemeinsame Termine
+```
+
+### Erweiterte Zeitformate
+| Format | Beispiel | Ergebnis |
+|--------|----------|----------|
+| Standard | `14:30`, `14.30`, `1430` | 14:30 |
+| Einfach | `15` | 15:00 |
+| Deutsch | `16 Uhr`, `halb 3`, `viertel vor 5` | 16:00, 2:30, 4:45 |
+| English | `4 PM`, `quarter past 2`, `half past 3` | 16:00, 2:15, 3:30 |
+
+## 🧪 Tests & Entwicklung
+
+### Tests ausführen
+```bash
+# Alle Tests
+make test
+
+# Spezifische Module
+pytest tests/test_enhanced_time_parser.py
+pytest tests/test_user_config.py
+
+# Mit Coverage
+pytest --cov=src tests/
 ```
 
 ### Code-Qualität
 ```bash
-make lint              # Code-Linting mit flake8
-make format            # Code-Formatierung mit black/isort
-make format-check      # Formatierung prüfen
+make lint              # Linting mit flake8
+make format            # Formatierung mit black/isort
 make type-check        # Type-Checking mit mypy
 ```
 
 ### Projekt-Struktur
 ```
-calendar-bot-app/
+telegram-notion-calendar-bot/
 ├── src/
-│   ├── models/
-│   │   └── appointment.py     # Datenmodell für Termine
-│   ├── services/
-│   │   └── notion_service.py  # Notion API Integration
+│   ├── bot.py                           # Haupt-Bot (Enhanced)
 │   ├── handlers/
-│   │   └── appointment_handler.py # Telegram Command Handler
-│   └── bot.py                 # Haupt-Bot-Logik
-├── tests/
-│   ├── test_appointment_model.py
-│   ├── test_notion_service.py
-│   └── test_appointment_handler.py
-├── config/
-│   └── settings.py            # Konfigurationsmanagement
-├── docker-compose.yml         # Docker Setup
-├── requirements.txt           # Python Dependencies
-├── Makefile                   # Entwicklungs-Commands
-└── README.md
+│   │   ├── enhanced_appointment_handler.py # Terminverwaltung + Menü
+│   │   └── debug_handler.py             # Debug-Tools
+│   ├── services/
+│   │   ├── combined_appointment_service.py # Dual-DB Support
+│   │   ├── enhanced_reminder_service.py    # Intelligente Erinnerungen
+│   │   └── notion_service.py            # Notion API
+│   ├── models/
+│   │   └── appointment.py               # Datenmodell
+│   └── utils/
+│       └── robust_time_parser.py        # Erweiterte Zeitverarbeitung
+├── tests/                               # Umfassende Tests
+├── config/                              # Konfiguration
+├── docs/                                # Dokumentation
+└── requirements.txt                     # Dependencies
 ```
 
 ## 🐳 Docker Deployment
 
-### Entwicklung
+### Docker Compose
 ```bash
-make docker-build     # Image bauen
-make docker-run       # Produktiv laufen lassen
-make docker-dev       # Development-Modus
-```
-
-### Produktiv
-```bash
+# Produktiv starten
 docker-compose up -d
-docker-compose logs -f calendar-bot  # Logs anzeigen
+
+# Logs anzeigen
+docker-compose logs -f
 ```
 
-## 🔧 Notion Database Setup
+### Manuell
+```bash
+# Bild erstellen
+docker build -t telegram-notion-bot .
 
-Deine Notion-Datenbank sollte folgende Eigenschaften haben:
+# Container starten
+docker run -d \
+  --name notion-bot \
+  -v $(pwd)/.env:/app/.env \
+  -v $(pwd)/users_config.json:/app/users_config.json \
+  telegram-notion-bot
+```
 
-| Property | Type | Required |
-|----------|------|----------|
-| Title | Title | ✅ |
-| Date | Date | ✅ |
-| Description | Text | ❌ |
-| Created | Date | ✅ |
+## 🐛 Fehlerbehebung
 
-Detaillierte Setup-Anweisungen: `make setup-notion`
+### "Du bist noch nicht konfiguriert"
+1. Telegram User ID ermitteln (wird beim ersten `/start` angezeigt)
+2. User in `users_config.json` hinzufügen
+3. Bot neu starten
 
-## 📊 Test Coverage
+### "Ungültiges Datum: Sonntag"
+✅ **Behoben!** Der Bot erkennt jetzt automatisch Wochentage und wählt den nächsten Termin.
+
+### Zeitformat wird nicht erkannt
+Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstützt viele Formate.
+
+### Termine aus gemeinsamer DB werden nicht angezeigt
+- `shared_notion_api_key` und `shared_notion_database_id` prüfen
+- Berechtigung für gemeinsame Datenbank sicherstellen
+
+### Erinnerungen kommen nicht an
+1. `reminder_enabled: true` in Konfiguration
+2. Bot-Logs auf Fehler prüfen: `tail -f bot.log`
+3. Mit `/reminder test` testen
+
+## 🔄 Migration & Upgrades
+
+### Von älteren Versionen
+1. Alte Bot-Dateien wurden automatisch bereinigt
+2. Nur noch `src/bot.py` verwenden
+3. Cache-Dateien wurden aufgeräumt
+4. Tests aktualisiert
+
+### Neue Features in dieser Version
+- ✅ **Wochentag-Erkennung**: "Sonntag", "Montag", etc.
+- ✅ **Automatisches Menü**: Öffnet sich beim Chat-Start
+- ✅ **Bereinigter Code**: Alte Dateien entfernt
+- ✅ **Verbesserte Dokumentation**: Konsolidiert und aktuell
+
+## 📈 Geplante Features
+
+- [ ] Termine bearbeiten/löschen über Menü
+- [ ] Kalender-Export (ICS)
+- [ ] Wiederkehrende Termine
+- [ ] Web-Interface für Benutzerverwaltung
+- [ ] Mehrsprachige Oberfläche
+- [ ] Erweiterte Terminfilter
+
+## 🚀 Makefile Commands
 
 ```bash
-# Test-Coverage anzeigen
-pytest --cov=src --cov-report=html
-# Öffne htmlcov/index.html im Browser
+make help          # Alle verfügbaren Commands
+make install       # Dependencies installieren
+make test          # Tests ausführen
+make lint          # Code-Linting
+make format        # Code-Formatierung
+make run-local     # Bot lokal starten
+make docker-run    # Bot mit Docker starten
+make clean         # Aufräumen
 ```
 
-## 🔒 Sicherheit
+## 🤝 Beitragen
 
-- Alle Credentials über Umgebungsvariablen
-- Niemals `.env` in Git committen
-- Bot läuft als Non-Root-User im Container
-- Input-Validierung und Error-Handling
+Pull Requests sind willkommen! Für größere Änderungen bitte zuerst ein Issue erstellen.
 
-## 🚀 Nächste Entwicklungsschritte
-
-1. **Termin-Bearbeitung**: `/edit` und `/delete` Commands
-2. **Erinnerungen**: Automatische Benachrichtigungen
-3. **Recurring Events**: Wiederholende Termine
-4. **Calendar Sync**: Google Calendar Integration
-5. **Multi-User**: User-Management und Permissions
-
-## 🐛 Troubleshooting
-
-### Bot antwortet nicht
-```bash
-docker-compose logs calendar-bot  # Logs prüfen
-make test  # Tests laufen lassen
-```
-
-### Notion-Verbindung fehlt
-1. API Key korrekt? (sollte mit `secret_` beginnen)
-2. Database ID korrekt? 
-3. Integration mit Datenbank geteilt?
-4. Datenbank-Properties korrekt benannt?
-
-### Tests schlagen fehl
-```bash
-make clean  # Aufräumen
-make install  # Dependencies neu installieren
-make test  # Tests erneut ausführen
-```
-
-## 📝 Beitragen
-
+### Entwicklung
 1. Fork das Repository
 2. Erstelle einen Feature-Branch
 3. Schreibe Tests für neue Features
-4. Stelle sicher dass alle Tests bestehen
+4. Stelle sicher dass `make test` und `make lint` bestehen
 5. Erstelle einen Pull Request
 
 ## 📄 Lizenz
 
-MIT License - siehe [LICENSE](LICENSE) Datei.
+MIT License - siehe [LICENSE](LICENSE) Datei
+
+---
+
+**Enhanced by:** Multi-User Support, Visual Menu, Combined Databases, Smart Reminders, Weekday Recognition 🚀
+
+**Current Version:** Enhanced Single-Bot Multi-User with Intelligent Date Parsing

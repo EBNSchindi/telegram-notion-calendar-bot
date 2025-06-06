@@ -39,4 +39,4 @@ def mock_telegram_context():
 @pytest.fixture
 def mock_notion_client():
     """Mock Notion client."""
-    return AsyncMock()
+    return Mock()
