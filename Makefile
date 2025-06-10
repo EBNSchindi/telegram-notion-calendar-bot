@@ -51,13 +51,13 @@ clean: ## Clean up temporary files
 	rm -rf .coverage
 
 docker-build: ## Build Docker image
-	docker-compose build
+	docker compose build
 
 docker-run: ## Run with Docker Compose
-	docker-compose up
+	docker compose up
 
 docker-dev: ## Run in development mode with Docker
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 run-local: ## Run bot locally (requires .env file)
 	python src/bot.py

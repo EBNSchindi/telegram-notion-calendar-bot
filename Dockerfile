@@ -1,24 +1,23 @@
 FROM python:3.11-slim
 
-WORKDIR /app
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
-COPY requirements.txt .
+# Set working directory
+WORKDIR /app
 
-# Install Python dependencies
+# Copy requirements first for better caching
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Create non-root user
+# Create a non-root user
 RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
 USER botuser
 
-# Run the bot
+# Command to run the bot
 CMD ["python", "src/bot.py"]

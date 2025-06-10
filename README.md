@@ -244,11 +244,21 @@ telegram-notion-calendar-bot/
 
 ### Docker Compose
 ```bash
-# Produktiv starten
-docker-compose up -d
+# Produktiv starten (neuere Docker-Versionen)
+docker compose up -d
+
+# Für ältere Docker-Versionen:
+# docker-compose up -d
 
 # Logs anzeigen
-docker-compose logs -f
+docker compose logs -f
+
+# Container stoppen
+docker compose down
+
+# Container neu bauen und starten
+docker compose build
+docker compose up -d
 ```
 
 ### Manuell
@@ -259,10 +269,17 @@ docker build -t telegram-notion-bot .
 # Container starten
 docker run -d \
   --name notion-bot \
-  -v $(pwd)/.env:/app/.env \
+  --env-file .env \
   -v $(pwd)/users_config.json:/app/users_config.json \
+  --restart unless-stopped \
   telegram-notion-bot
 ```
+
+### Wichtige Hinweise
+- Der Bot startet automatisch `src/bot.py` 
+- Die `.env` Datei wird über `--env-file` eingebunden
+- `users_config.json` wird als Volume gemountet
+- Container startet automatisch neu bei Fehlern
 
 ## 🐛 Fehlerbehebung
 
