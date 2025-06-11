@@ -26,3 +26,6 @@ isort==5.13.2
 
 # Utilities
 aiohttp==3.9.3
+
+# Email processing
+email-validator==2.1.1

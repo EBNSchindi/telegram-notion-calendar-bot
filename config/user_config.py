@@ -34,7 +34,12 @@ class UserConfigManager:
     
     def _load_from_env(self):
         """Load configuration from environment variables for backward compatibility."""
-        # Check if we have notion API config (TELEGRAM_BOT_TOKEN is handled by the bot itself)
+        # Skip loading from environment if users_config.json exists
+        if os.path.exists(self.config_file):
+            logger.info("users_config.json found - skipping environment variable loading")
+            return
+            
+        # Only load from env if no users_config.json exists (backward compatibility)
         if os.getenv('NOTION_API_KEY') and os.getenv('NOTION_DATABASE_ID'):
             # Create default user config from env
             default_user = UserConfig(

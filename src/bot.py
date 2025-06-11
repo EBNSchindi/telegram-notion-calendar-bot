@@ -15,6 +15,7 @@ from config.user_config import UserConfigManager, UserConfig
 from src.handlers.enhanced_appointment_handler import EnhancedAppointmentHandler
 from src.handlers.debug_handler import DebugHandler
 from src.services.enhanced_reminder_service import EnhancedReminderService
+from src.services.business_calendar_sync import create_sync_manager_from_env
 
 # Enable logging
 logging.basicConfig(
@@ -34,6 +35,7 @@ class EnhancedCalendarBot:
         self.user_config_manager = UserConfigManager()
         self.application = None
         self.reminder_service = None
+        self.business_sync_manager = None
         self._handlers = {}  # Cache for user handlers
         self.debug_handler = DebugHandler(self.user_config_manager)  # Debug utilities
         
@@ -298,12 +300,36 @@ class EnhancedCalendarBot:
         self.reminder_service = EnhancedReminderService(application.bot, self.user_config_manager)
         await self.reminder_service.start()
         logger.info("Enhanced reminder service started")
+        
+        # Start business calendar sync
+        try:
+            self.business_sync_manager = create_sync_manager_from_env()
+            
+            # Add all configured users to business sync
+            for user_config in self.user_config_manager._users.values():
+                if user_config.telegram_user_id != 0:  # Skip default user
+                    self.business_sync_manager.add_user(user_config)
+            
+            # Start business sync in background
+            if self.business_sync_manager.user_syncs:
+                asyncio.create_task(self.business_sync_manager.start_all_syncs())
+                logger.info("Business calendar sync started")
+            else:
+                logger.info("No users configured for business calendar sync")
+                
+        except Exception as e:
+            logger.error(f"Failed to start business calendar sync: {e}")
+            # Don't fail the whole bot if business sync fails
     
     async def post_shutdown(self, application: Application) -> None:
         """Cleanup services on shutdown."""
         if self.reminder_service:
             await self.reminder_service.stop()
             logger.info("Enhanced reminder service stopped")
+        
+        if self.business_sync_manager:
+            self.business_sync_manager.stop_all_syncs()
+            logger.info("Business calendar sync stopped")
     
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle errors."""

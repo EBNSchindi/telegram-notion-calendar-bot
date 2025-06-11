@@ -30,11 +30,18 @@ class Settings:
         if not self.telegram_token:
             errors.append("TELEGRAM_BOT_TOKEN is required")
             
-        if not self.notion_api_key:
-            errors.append("NOTION_API_KEY is required")
-            
-        if not self.notion_database_id:
-            errors.append("NOTION_DATABASE_ID is required")
+        # Check if users_config.json exists - if so, we're in multi-user mode
+        import os
+        if os.path.exists('users_config.json'):
+            # In multi-user mode, only telegram token is required
+            pass
+        else:
+            # In single-user mode, notion config is also required
+            if not self.notion_api_key:
+                errors.append("NOTION_API_KEY is required")
+                
+            if not self.notion_database_id:
+                errors.append("NOTION_DATABASE_ID is required")
             
         if errors and self.environment != 'testing':
             raise ValueError(f"Configuration errors: {', '.join(errors)}")

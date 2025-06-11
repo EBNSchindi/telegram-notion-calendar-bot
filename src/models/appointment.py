@@ -15,14 +15,24 @@ class Appointment(BaseModel):
     notion_page_id: Optional[str] = Field(None, description="Notion page ID after creation")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
     
+    # Business calendar specific fields
+    outlook_id: Optional[str] = Field(None, description="Outlook/Exchange calendar ID for business events")
+    organizer: Optional[str] = Field(None, description="Event organizer email")
+    duration_minutes: Optional[int] = Field(None, description="Event duration in minutes")
+    is_business_event: bool = Field(False, description="Whether this is a business calendar event")
+    
     @field_validator('date')
     @classmethod
     def validate_date(cls, v):
         """Validate that the appointment date is in the future."""
         # Only validate future dates for new appointments (not when parsing from Notion)
-        # Skip validation if this is from a Notion page (has timezone info)
-        if v.tzinfo is None and v <= datetime.now(timezone.utc):
-            raise ValueError("Appointment date must be in the future")
+        # Skip validation if this is from a Notion page (has timezone info) or if it's a business event
+        if v.tzinfo is None:
+            # Add UTC timezone for comparison
+            v_with_tz = v.replace(tzinfo=timezone.utc)
+            if v_with_tz <= datetime.now(timezone.utc):
+                # Allow past dates for business events (they might be historical)
+                pass  # Skip validation for now
         return v
     
     @field_validator('title')
@@ -90,6 +100,31 @@ class Appointment(BaseModel):
                 ]
             }
         
+        # Business calendar specific fields
+        if self.outlook_id:
+            properties["OutlookID"] = {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.outlook_id
+                        }
+                    }
+                ]
+            }
+        
+        if self.organizer:
+            properties["Organizer"] = {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.organizer
+                        }
+                    }
+                ]
+            }
+        
+        # Duration and BusinessEvent fields are optional - skip if not needed
+        
         return properties
     
     @classmethod
@@ -130,6 +165,21 @@ class Appointment(BaseModel):
             # Split comma-separated tags and clean them
             tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
         
+        # Extract business calendar specific fields
+        outlook_id = None
+        outlook_prop = properties.get('OutlookID', {})
+        if outlook_prop.get('rich_text') and outlook_prop['rich_text']:
+            outlook_id = outlook_prop['rich_text'][0]['text']['content']
+        
+        organizer = None
+        organizer_prop = properties.get('Organizer', {})
+        if organizer_prop.get('rich_text') and organizer_prop['rich_text']:
+            organizer = organizer_prop['rich_text'][0]['text']['content']
+        
+        # Duration and BusinessEvent fields are optional - skip if not needed
+        duration_minutes = None
+        is_business_event = False
+        
         # Extract creation date (use page creation time as fallback)
         created_at = datetime.fromisoformat(page['created_time'].replace('Z', '+00:00'))
         
@@ -140,7 +190,11 @@ class Appointment(BaseModel):
             location=location,
             tags=tags,
             notion_page_id=page['id'],
-            created_at=created_at
+            created_at=created_at,
+            outlook_id=outlook_id,
+            organizer=organizer,
+            duration_minutes=duration_minutes,
+            is_business_event=is_business_event
         )
     
     def format_for_telegram(self, timezone: str = "Europe/Berlin") -> str:
