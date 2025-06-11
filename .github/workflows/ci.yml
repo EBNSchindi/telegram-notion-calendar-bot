@@ -1,0 +1,285 @@
+# 🚀 Telegram Notion Calendar Bot - CI/CD Pipeline
+# Automatische Tests, Code-Qualität und Docker Build
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Wöchentliche Tests um Dependencies-Probleme zu erkennen
+    - cron: '0 6 * * 1'  # Montags 6:00 UTC
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.7.1'
+
+jobs:
+  # 🧪 Testing Job
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create test config files
+      run: |
+        # Create minimal test config
+        echo "TELEGRAM_BOT_TOKEN=test_token" > .env
+        echo "ENVIRONMENT=testing" >> .env
+        
+        # Create test users config
+        echo '{"users": []}' > users_config.json
+    
+    - name: Run tests with pytest
+      run: |
+        pytest --tb=short --cov=src --cov-report=xml --cov-report=term-missing
+      env:
+        ENVIRONMENT: testing
+    
+    - name: Upload coverage to Codecov
+      if: matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # 🔍 Code Quality Job
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run Black (Code Formatting)
+      run: black --check --diff src tests
+    
+    - name: Run isort (Import Sorting)
+      run: isort --check-only --diff src tests
+    
+    - name: Run flake8 (Linting)
+      run: flake8 src tests
+    
+    - name: Run mypy (Type Checking)
+      run: mypy src
+      continue-on-error: true  # Type hints sind optional
+
+  # 🔒 Security Scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+    
+    - name: Run Safety (Dependencies Security)
+      run: safety check --json
+      continue-on-error: true
+    
+    - name: Run Bandit (Code Security)
+      run: bandit -r src/ -f json
+      continue-on-error: true
+
+  # 🐳 Docker Build
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test, code-quality]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/telegram-notion-calendar-bot
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # 📦 Release Job (nur bei Tags)
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [test, code-quality, docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Generiere Changelog seit letztem Tag
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+        if [ -z "$PREVIOUS_TAG" ]; then
+          PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+        fi
+        
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "## Changes since $PREVIOUS_TAG" >> $GITHUB_OUTPUT
+        git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%an)" --no-merges >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          🚀 **Telegram Notion Calendar Bot Release ${{ github.ref_name }}**
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## 📦 Installation
+          
+          ### Docker
+          ```bash
+          docker run -d --name calendar-bot \
+            --env-file .env \
+            -v $(pwd)/users_config.json:/app/users_config.json \
+            ${{ secrets.DOCKER_USERNAME }}/telegram-notion-calendar-bot:${{ github.ref_name }}
+          ```
+          
+          ### Local
+          ```bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd telegram-notion-calendar-bot
+          git checkout ${{ github.ref_name }}
+          ./setup.sh
+          ```
+          
+          ## 📖 Documentation
+          - [README](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)
+          - [Business Email Integration](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/BUSINESS_EMAIL_INTEGRATION.md)
+          - [Notion Setup](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/NOTION_SETUP.md)
+        draft: false
+        prerelease: false
+
+  # 🚀 Deployment Job (optional für Self-Hosted Runner)
+  deploy:
+    name: Deploy to Production
+    runs-on: self-hosted  # Requires self-hosted runner
+    needs: [test, code-quality, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - name: Deploy to server
+      run: |
+        echo "🚀 Deploying to production server..."
+        # Hier würde der Deployment-Code stehen
+        # Z.B. Docker Compose Update, Kubernetes Deployment, etc.
+        
+        # Beispiel für Docker Compose Update:
+        # cd /path/to/production
+        # docker compose pull
+        # docker compose up -d
+        
+        echo "✅ Deployment completed"
+
+# 📝 Workflow Notifications
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [test, code-quality, security, docker]
+    if: failure()
+    
+    steps:
+    - name: Notify Slack on Failure
+      if: env.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#dev-notifications'
+        text: |
+          🚨 CI/CD Pipeline failed for ${{ github.repository }}
+          
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Author: ${{ github.actor }}
+          
+          Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

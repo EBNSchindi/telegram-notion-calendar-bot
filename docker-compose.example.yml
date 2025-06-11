@@ -1,0 +1,169 @@
+# Docker Compose Beispiel-Konfiguration für Telegram Notion Calendar Bot
+# Mit Business Email Integration Support
+#
+# Setup:
+# 1. Kopiere diese Datei zu docker-compose.yml
+# 2. Konfiguriere .env mit deinen API Keys
+# 3. Erstelle users_config.json basierend auf users_config.example.json
+# 4. Starte mit: docker compose up -d
+
+services:
+  calendar-bot:
+    build: .
+    container_name: telegram-notion-calendar-bot
+    restart: unless-stopped
+    
+    # Environment-Konfiguration
+    env_file:
+      - .env
+    
+    # Volumes für persistente Daten
+    volumes:
+      - ./users_config.json:/app/users_config.json:ro  # Read-only user config
+      - ./data:/app/data                              # Log files and app data
+      - bot-logs:/app/logs                            # Persistent log storage
+    
+    # Networking
+    networks:
+      - bot-network
+    
+    # Health Check für Bot-Status
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Resource Limits für Production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Logging Configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security Context
+    user: "1000:1000"  # Non-root user
+    
+    # Environment Variables (Alternative zu .env file)
+    environment:
+      # Telegram Configuration
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # Email Sync Configuration
+      - EMAIL_SYNC_ENABLED=${EMAIL_SYNC_ENABLED:-false}
+      - EMAIL_ADDRESS=${EMAIL_ADDRESS}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - IMAP_SERVER=${IMAP_SERVER:-imap.gmail.com}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-300}
+      
+      # Business Calendar Database
+      - BUSINESS_NOTION_DATABASE_ID=${BUSINESS_NOTION_DATABASE_ID}
+      
+      # Email Processing Settings
+      - DELETE_AFTER_PROCESSING=${DELETE_AFTER_PROCESSING:-false}
+      - OUTLOOK_SENDER_WHITELIST=${OUTLOOK_SENDER_WHITELIST}
+      
+      # Security
+      - AUTHORIZED_USERS=${AUTHORIZED_USERS}
+      
+      # Application Settings
+      - TIMEZONE=${TIMEZONE:-Europe/Berlin}
+      - LANGUAGE=${LANGUAGE:-de}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+
+# Optional: Development Override
+# Uncomment for development setup
+  # calendar-bot-dev:
+  #   extends: calendar-bot
+  #   container_name: telegram-notion-calendar-bot-dev
+  #   environment:
+  #     - ENVIRONMENT=development
+  #     - LOG_LEVEL=DEBUG
+  #   volumes:
+  #     - ./src:/app/src:ro  # Live code reloading
+  #   command: python -u src/bot.py  # Unbuffered output for debugging
+
+# Optional: Database für lokale Entwicklung
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: calendar-bot-postgres
+  #   environment:
+  #     POSTGRES_DB: calendar_bot
+  #     POSTGRES_USER: calendar_user
+  #     POSTGRES_PASSWORD: secure_password
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - bot-network
+  #   ports:
+  #     - "5432:5432"
+
+# Optional: Redis für Caching/Sessions
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: calendar-bot-redis
+  #   networks:
+  #     - bot-network
+  #   volumes:
+  #     - redis-data:/data
+
+# Optional: Monitoring mit Prometheus + Grafana
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: calendar-bot-prometheus
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   networks:
+  #     - bot-network
+  #   ports:
+  #     - "9090:9090"
+
+networks:
+  bot-network:
+    driver: bridge
+    name: telegram-calendar-network
+
+volumes:
+  bot-data:
+    name: telegram-calendar-data
+  bot-logs:
+    name: telegram-calendar-logs
+  # postgres-data:
+  #   name: telegram-calendar-postgres
+  # redis-data:
+  #   name: telegram-calendar-redis
+
+# Production Deployment Notes:
+# 
+# 1. SSL/TLS Setup:
+#    - Für Webhook-Mode nginx reverse proxy verwenden
+#    - Let's Encrypt Zertifikate einrichten
+#
+# 2. Backup Strategy:
+#    - users_config.json regelmäßig sichern
+#    - Log-Rotation konfigurieren
+#    - Notion Database Exports einrichten
+#
+# 3. Monitoring:
+#    - Health Checks aktivieren
+#    - Log Aggregation (ELK Stack)
+#    - Metrics Collection (Prometheus/Grafana)
+#
+# 4. Security:
+#    - Secrets Management (Docker Secrets)
+#    - Network Isolation
+#    - Non-root Container User
+#    - Regelmäßige Image Updates

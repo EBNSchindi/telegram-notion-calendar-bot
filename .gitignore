@@ -8,11 +8,14 @@ venv/
 ENV/
 env/
 .venv
+.conda/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 
 # IDE
 .vscode/
@@ -20,37 +23,126 @@ env/
 *.swp
 *.swo
 *~
+.spyderproject
+.spyproject
+.ropeproject
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Application data
 data/
+logs/
+tmp/
+temp/
 *.db
 *.sqlite
+*.sqlite3
 *.log
 bot.log
+*.pid
 
 # Configuration with secrets
 users_config.json
+config.json
+secrets.yaml
+secrets.yml
 
 # Docker
 docker-compose.override.yml
+docker-compose.prod.yml
+.dockerignore
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
 .nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 # Distribution / packaging
 dist/
 build/
 *.egg-info/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+MANIFEST
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
 
 # Backup files
 *.bak
 *.backup
+*.orig
+*.rej
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Email processing cache
+email_cache/
+processed_emails/
+
+# Notion cache
+notion_cache/
+.notion/
+
+# Business calendar sync
+business_sync_cache/
+outlook_cache/
+
+# Security files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# CI/CD
+.github/secrets/
+deployment/secrets/
+
+# Documentation build
+docs/_build/
+docs/build/
+site/
+
+# Local development
+.local/
+.user/
+.personal/
+
+# Performance profiling
+.prof
