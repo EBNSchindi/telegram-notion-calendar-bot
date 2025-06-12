@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Dict, Set
 from datetime import datetime, timedelta
 
@@ -147,23 +148,29 @@ class BusinessCalendarSync:
         try:
             logger.info("Starting business calendar sync")
             
-            # Fetch unread emails
-            emails = self.email_processor.fetch_unread_emails()
-            
-            if not emails:
-                logger.debug("No unread emails found")
-                return
-            
-            logger.info(f"Processing {len(emails)} unread emails")
-            
-            for email_msg in emails:
-                try:
-                    await self._process_single_email(email_msg)
-                except Exception as e:
-                    logger.error(f"Error processing email {email_msg.uid}: {e}")
-                    self.stats['errors'] += 1
-                    continue
-            
+            # Create thread pool for email operations
+            loop = asyncio.get_event_loop()
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="email-sync") as executor:
+                # Fetch unread emails in thread to avoid blocking
+                emails = await loop.run_in_executor(
+                    executor,
+                    self.email_processor.fetch_unread_emails
+                )
+                
+                if not emails:
+                    logger.debug("No unread emails found")
+                    return
+                
+                logger.info(f"Processing {len(emails)} unread emails")
+                
+                for email_msg in emails:
+                    try:
+                        await self._process_single_email(email_msg, executor)
+                    except Exception as e:
+                        logger.error(f"Error processing email {email_msg.uid}: {e}")
+                        self.stats['errors'] += 1
+                        continue
+                
             self.stats['last_sync'] = datetime.now()
             logger.info(f"Sync completed. Stats: {self.stats}")
             
@@ -171,12 +178,13 @@ class BusinessCalendarSync:
             logger.error(f"Error in business calendar sync: {e}")
             self.stats['errors'] += 1
     
-    async def _process_single_email(self, email_msg):
+    async def _process_single_email(self, email_msg, executor):
         """
         Process a single email message.
         
         Args:
             email_msg: EmailMessage object to process
+            executor: ThreadPoolExecutor for running blocking operations
         """
         logger.info(f"Processing email: {email_msg.subject} from {email_msg.sender}")
         
@@ -191,7 +199,12 @@ class BusinessCalendarSync:
         if not business_event:
             logger.warning(f"Failed to parse business event from email {email_msg.uid}")
             # Mark as read but don't delete - might need manual review
-            self.email_processor.mark_email_as_read(email_msg.uid)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                executor,
+                self.email_processor.mark_email_as_read,
+                email_msg.uid
+            )
             return
         
         logger.info(f"Parsed event: {business_event.event_title} ({business_event.action})")
@@ -199,7 +212,12 @@ class BusinessCalendarSync:
         # Check for duplicate processing
         if business_event.outlook_ical_id in self.processed_outlook_ids:
             logger.info(f"Event {business_event.outlook_ical_id} already processed, skipping")
-            self.email_processor.process_email_after_success(email_msg.uid)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                executor,
+                self.email_processor.process_email_after_success,
+                email_msg.uid
+            )
             return
         
         # Process the business event
@@ -208,12 +226,22 @@ class BusinessCalendarSync:
         if success:
             # Mark as processed
             self.processed_outlook_ids.add(business_event.outlook_ical_id)
-            self.email_processor.process_email_after_success(email_msg.uid)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                executor,
+                self.email_processor.process_email_after_success,
+                email_msg.uid
+            )
             self.stats['emails_processed'] += 1
             logger.info(f"Successfully processed email {email_msg.uid}")
         else:
             # Mark as read but don't delete on error
-            self.email_processor.mark_email_as_read(email_msg.uid)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                executor,
+                self.email_processor.mark_email_as_read,
+                email_msg.uid
+            )
             logger.error(f"Failed to process email {email_msg.uid}")
     
     def _is_calendar_email(self, email_msg) -> bool:

@@ -4,6 +4,8 @@ import email
 import logging
 import asyncio
 import time
+import socket
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Dict, Tuple
 from email.mime.text import MIMEText
 from dataclasses import dataclass
@@ -49,6 +51,8 @@ class EmailProcessor:
         self.connection = None
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = 3
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="imap")
+        self._imap_timeout = 30  # seconds
         
     @contextmanager
     def imap_connection(self):
@@ -81,6 +85,9 @@ class EmailProcessor:
         try:
             logger.info(f"Connecting to {self.email_config.imap_server}:{self.email_config.imap_port}")
             
+            # Set socket timeout
+            socket.setdefaulttimeout(self._imap_timeout)
+            
             connection = imaplib.IMAP4_SSL(
                 self.email_config.imap_server, 
                 self.email_config.imap_port
@@ -103,6 +110,9 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Failed to connect to email server: {e}")
             raise
+        finally:
+            # Reset socket timeout
+            socket.setdefaulttimeout(None)
     
     def _reconnect_if_needed(self) -> imaplib.IMAP4_SSL:
         """
@@ -311,7 +321,7 @@ class EmailProcessor:
     
     def delete_email(self, email_uid: str) -> bool:
         """
-        Delete email from server.
+        Delete email from server immediately.
         
         Args:
             email_uid: Email UID to delete
@@ -325,14 +335,23 @@ class EmailProcessor:
                 status, _ = connection.store(email_uid, '+FLAGS', '\\Deleted')
                 
                 if status == 'OK':
-                    # Expunge to permanently delete
-                    connection.expunge()
-                    logger.info(f"Successfully deleted email {email_uid}")
-                    return True
+                    # Expunge immediately to permanently delete
+                    logger.info(f"Expunging email {email_uid}...")
+                    status, response = connection.expunge()
+                    
+                    if status == 'OK':
+                        logger.info(f"Successfully deleted email {email_uid}")
+                        return True
+                    else:
+                        logger.error(f"Failed to expunge email {email_uid}: {response}")
+                        return False
                 else:
                     logger.error(f"Failed to mark email {email_uid} for deletion")
                     return False
                     
+        except socket.timeout:
+            logger.error(f"Timeout while deleting email {email_uid}")
+            return False
         except Exception as e:
             logger.error(f"Error deleting email {email_uid}: {e}")
             return False
