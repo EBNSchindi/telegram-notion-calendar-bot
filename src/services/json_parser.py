@@ -37,17 +37,22 @@ class BusinessEventParser:
     def __init__(self):
         self.json_pattern = re.compile(r'\{[^}]*\}', re.DOTALL)
         
-    def extract_json_from_email(self, email_body: str) -> Optional[str]:
+    def extract_json_from_email(self, email_body: str, max_size: int = 50000) -> Optional[str]:
         """
-        Extract JSON from email body.
+        Extract JSON from email body with size limits.
         
         Args:
             email_body: The full email body content
+            max_size: Maximum allowed email body size in characters
             
         Returns:
             JSON string if found, None otherwise
         """
         try:
+            # Check email body size
+            if len(email_body) > max_size:
+                logger.warning(f"Email body too large: {len(email_body)} characters (max: {max_size})")
+                return None
             # Split by lines and look for JSON in first few lines
             lines = email_body.strip().split('\n')
             
@@ -68,17 +73,23 @@ class BusinessEventParser:
             logger.error(f"Error extracting JSON from email: {e}")
             return None
     
-    def parse_business_event(self, json_string: str) -> Optional[BusinessEvent]:
+    def parse_business_event(self, json_string: str, max_json_size: int = 10000) -> Optional[BusinessEvent]:
         """
-        Parse JSON string into BusinessEvent object.
+        Parse JSON string into BusinessEvent object with size validation.
         
         Args:
             json_string: JSON string containing event data
+            max_json_size: Maximum allowed JSON size in characters
             
         Returns:
             BusinessEvent object if parsing successful, None otherwise
         """
         try:
+            # Check JSON size
+            if len(json_string) > max_json_size:
+                logger.warning(f"JSON too large: {len(json_string)} characters (max: {max_json_size})")
+                return None
+            
             data = json.loads(json_string)
             
             # Validate required fields

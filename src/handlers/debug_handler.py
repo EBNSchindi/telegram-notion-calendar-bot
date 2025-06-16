@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 from src.utils.robust_time_parser import RobustTimeParser
 from src.services.combined_appointment_service import CombinedAppointmentService
 from config.user_config import UserConfigManager
+from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +15,21 @@ class DebugHandler:
     
     def __init__(self, user_config_manager: UserConfigManager = None):
         self.user_config_manager = user_config_manager
+        self.settings = Settings()
+    
+    def _is_admin(self, user_id: int) -> bool:
+        """Check if user is authorized to use debug commands."""
+        return user_id in self.settings.admin_users or (
+            self.settings.environment == 'development' and user_id in self.settings.authorized_users
+        )
     
     async def test_time_format(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Test a time format input."""
+        user_id = update.effective_user.id
+        if not self._is_admin(user_id):
+            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            return
+            
         if not context.args:
             help_text = (
                 "🧪 *Zeit-Format Tester*\n\n"
@@ -75,6 +88,10 @@ class DebugHandler:
     
     async def show_time_formats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show all supported time formats with examples."""
+        user_id = update.effective_user.id
+        if not self._is_admin(user_id):
+            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            return
         formats_text = """
 📚 *Unterstützte Zeitformate*
 
@@ -113,6 +130,11 @@ class DebugHandler:
     
     async def validate_appointment_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Validate a complete appointment input."""
+        user_id = update.effective_user.id
+        if not self._is_admin(user_id):
+            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            return
+            
         if len(context.args) < 3:
             help_text = (
                 "🔍 *Termin-Eingabe Validator*\n\n"
@@ -201,11 +223,14 @@ class DebugHandler:
     
     async def test_notion_connection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Test Notion database connections for the user."""
+        user_id = update.effective_user.id
+        if not self._is_admin(user_id):
+            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            return
+            
         if not self.user_config_manager:
             await update.message.reply_text("❌ User Config Manager nicht verfügbar")
             return
-            
-        user_id = update.effective_user.id
         user_config = self.user_config_manager.get_user_config(user_id)
         
         if not user_config:

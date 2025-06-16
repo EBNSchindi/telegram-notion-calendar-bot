@@ -332,18 +332,45 @@ class EnhancedCalendarBot:
             logger.info("Business calendar sync stopped")
     
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle errors."""
-        logger.error(f"Exception while handling an update: {context.error}")
+        """Handle errors securely without exposing internal details."""
+        # Log detailed error for debugging (server-side only)
+        error_msg = str(context.error)
+        error_type = type(context.error).__name__
         
-        # Try to send error message to user if possible
+        # Log with user ID for tracking but without exposing sensitive data
+        user_id = "unknown"
+        if isinstance(update, Update) and update.effective_user:
+            user_id = update.effective_user.id
+        
+        logger.error(
+            f"Bot error for user {user_id}: {error_type} - {error_msg[:200]}...",
+            exc_info=context.error
+        )
+        
+        # Send safe, generic error message to user
         if isinstance(update, Update) and update.effective_message:
             try:
-                await update.effective_message.reply_text(
-                    "❌ Ein unerwarteter Fehler ist aufgetreten. "
-                    "Bitte versuche es erneut oder kontaktiere den Administrator."
-                )
+                # Different messages based on error type to be more helpful
+                if "network" in error_msg.lower() or "timeout" in error_msg.lower():
+                    user_message = (
+                        "🌐 Verbindungsproblem aufgetreten. "
+                        "Bitte versuche es in einem Moment erneut."
+                    )
+                elif "notion" in error_msg.lower():
+                    user_message = (
+                        "📝 Problem mit der Notion-Verbindung. "
+                        "Bitte überprüfe deine Konfiguration."
+                    )
+                else:
+                    user_message = (
+                        "❌ Ein unerwarteter Fehler ist aufgetreten. "
+                        "Bitte versuche es erneut oder kontaktiere den Administrator."
+                    )
+                
+                await update.effective_message.reply_text(user_message)
+                
             except Exception as e:
-                logger.error(f"Failed to send error message to user: {e}")
+                logger.error(f"Failed to send error message to user {user_id}: {e}")
 
     def run(self):
         """Start the bot."""

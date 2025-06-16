@@ -20,6 +20,11 @@ class Settings:
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
         self.environment = os.getenv('ENVIRONMENT', 'production')
         
+        # Security Settings
+        authorized_users_str = os.getenv('AUTHORIZED_USERS', '')
+        self.authorized_users = [int(uid.strip()) for uid in authorized_users_str.split(',') if uid.strip().isdigit()]
+        self.admin_users = [int(uid.strip()) for uid in os.getenv('ADMIN_USERS', '').split(',') if uid.strip().isdigit()]
+        
         # Validate required settings
         self._validate()
     

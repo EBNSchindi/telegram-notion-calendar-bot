@@ -69,8 +69,8 @@ class EmailProcessor:
                 try:
                     connection.close()
                     connection.logout()
-                except:
-                    pass  # Ignore cleanup errors
+                except Exception as e:
+                    logger.debug(f"Error during IMAP cleanup: {e}")  # Log but don't fail
     
     def _connect(self) -> imaplib.IMAP4_SSL:
         """

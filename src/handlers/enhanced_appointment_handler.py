@@ -10,6 +10,9 @@ from src.models.appointment import Appointment
 from src.services.combined_appointment_service import CombinedAppointmentService
 from config.user_config import UserConfig
 from src.utils.robust_time_parser import RobustTimeParser
+from src.utils.rate_limiter import rate_limit
+from src.utils.input_validator import InputValidator
+from pydantic.error_wrappers import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,7 @@ class EnhancedAppointmentHandler:
             logger.warning(f"Invalid timezone '{timezone_str}', falling back to Europe/Berlin: {e}")
             self.timezone = pytz.timezone('Europe/Berlin')
     
+    @rate_limit(max_requests=20, time_window=60)  # 20 requests per minute for menu
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the main menu with inline buttons."""
         user = update.effective_user
@@ -286,9 +290,23 @@ class EnhancedAppointmentHandler:
         )
     
     # Legacy command methods for backward compatibility
+    @rate_limit(max_requests=10, time_window=60)  # 10 appointments per minute
     async def add_appointment(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /add command to create new appointment."""
-        logger.info(f"Received /add command from user {update.effective_user.id} with args: {context.args}")
+        user_id = update.effective_user.id
+        logger.info(f"Received /add command from user {user_id} with args: {context.args}")
+        
+        # Validate Telegram input
+        try:
+            InputValidator.validate_telegram_input(
+                user_id=user_id,
+                username=update.effective_user.username,
+                message_text=update.message.text or ""
+            )
+        except ValidationError as e:
+            await update.message.reply_text("❌ Ungültige Eingabe. Bitte versuche es erneut.")
+            logger.warning(f"Invalid Telegram input from user {user_id}: {e}")
+            return
         
         if not context.args:
             await update.message.reply_text(
@@ -305,6 +323,21 @@ class EnhancedAppointmentHandler:
         try:
             # Parse command arguments
             date_time, title, description = self._parse_add_command(context.args)
+            
+            # Validate appointment input
+            try:
+                validated_input = InputValidator.validate_appointment_input(
+                    title=title,
+                    description=description
+                )
+                title = validated_input.get('title', title)
+                description = validated_input.get('description', description)
+            except ValidationError as e:
+                await update.message.reply_text(
+                    f"❌ Ungültige Termindaten: {e.errors()[0]['msg']}\n"
+                    "Bitte überprüfe deine Eingabe."
+                )
+                return
             
             # Create appointment
             appointment = Appointment(
@@ -355,6 +388,7 @@ class EnhancedAppointmentHandler:
                     "Bitte kontaktiere den Administrator."
                 )
     
+    @rate_limit(max_requests=15, time_window=60)  # 15 queries per minute
     async def today_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /today command."""
         try:
@@ -372,6 +406,7 @@ class EnhancedAppointmentHandler:
                 "❌ Fehler beim Abrufen der heutigen Termine. Bitte versuche es erneut."
             )
     
+    @rate_limit(max_requests=15, time_window=60)  # 15 queries per minute
     async def tomorrow_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tomorrow command."""
         try:
@@ -389,6 +424,7 @@ class EnhancedAppointmentHandler:
                 "❌ Fehler beim Abrufen der morgigen Termine. Bitte versuche es erneut."
             )
     
+    @rate_limit(max_requests=15, time_window=60)  # 15 queries per minute
     async def list_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /list command."""
         try:

@@ -45,6 +45,70 @@ Beim Start (`/start`) erscheint ein interaktives Menü:
 ⚙️ Erinnerungen      ❓ Hilfe
 ```
 
+## 👥 Multi-User Setup
+
+Der Bot unterstützt **mehrere Benutzer** mit individuellen Konfigurationen:
+
+### Neuen Benutzer hinzufügen
+
+#### 1. **Telegram User ID ermitteln**
+```
+Neuer Benutzer tippt: /start
+Bot antwortet: "❌ Du bist noch nicht konfiguriert. Deine User ID: 987654321"
+```
+
+#### 2. **Notion für neuen Benutzer einrichten**
+- [notion.com](https://notion.com) → **"My integrations"**
+- **"New integration"** erstellen
+- **API-Key kopieren** (beginnt mit `secret_`)
+- **Kalender-Datenbank** erstellen
+- **Integration zur Datenbank hinzufügen**
+
+#### 3. **Benutzer konfigurieren**
+In `users_config.json` hinzufügen:
+```json
+{
+  "bestehender_user_id": { ... },
+  "987654321": {
+    "telegram_user_id": 987654321,
+    "telegram_username": "neuer_username", 
+    "notion_api_key": "secret_neuer_key_hier",
+    "notion_database_id": "neue_database_id",
+    "timezone": "Europe/Berlin",
+    "language": "de"
+  }
+}
+```
+
+#### 4. **Berechtigung erteilen**
+In `.env` die User ID hinzufügen:
+```env
+AUTHORIZED_USERS=bestehende_id,987654321
+```
+
+#### 5. **Bot testen**
+```
+Neuer Benutzer tippt: /start
+Bot antwortet: "Hallo [Name]! 👋 Dein Kalender-Bot ist bereit!"
+```
+
+### 🔐 Sicherheitseinstellungen
+
+```env
+# Berechtigte Benutzer (komma-getrennte User IDs)
+AUTHORIZED_USERS=123456,789012
+
+# Admin-Benutzer für Debug-Befehle
+ADMIN_USERS=123456
+```
+
+### 📊 Datentrennung
+- **Jeder Benutzer** hat seine eigene Notion-Datenbank
+- **Getrennte Kalender** - Benutzer sehen nur ihre Termine
+- **Optional**: Gemeinsame Team-Datenbank für alle
+
+---
+
 ## ⚙️ Installation & Konfiguration
 
 ### 1. Grundsetup
@@ -317,6 +381,39 @@ Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstütz
 - ✅ **Bereinigter Code**: Alte Dateien entfernt
 - ✅ **Verbesserte Dokumentation**: Konsolidiert und aktuell
 
+## 🔒 Sicherheitsfeatures
+
+### Implementierte Sicherheitsmaßnahmen
+- ✅ **Rate Limiting**: Schutz vor DoS-Angriffen (30 Anfragen/Minute)
+- ✅ **Input-Validierung**: Pydantic-basierte Eingabeprüfung
+- ✅ **Admin-Berechtigung**: Debug-Befehle nur für autorisierte Admins
+- ✅ **JSON Size Limits**: Schutz vor großen Payloads (50KB Email, 10KB JSON)
+- ✅ **Sichere Fehlerbehandlung**: Keine Exposition interner Fehlerdetails
+- ✅ **HTML-Escaping**: XSS-Schutz für alle Benutzereingaben
+
+### Sicherheitskonfiguration
+```env
+# .env Datei
+AUTHORIZED_USERS=123456,789012  # Berechtigte Bot-Nutzer
+ADMIN_USERS=123456              # Admin für Debug-Befehle
+ENVIRONMENT=production          # production/development/testing
+```
+
+### Debug-Befehle (nur für Admins)
+```bash
+/test_time 16 Uhr       # Zeitformat testen
+/formats               # Alle unterstützten Formate
+/validate morgen 14:00 Meeting  # Eingabe validieren
+/test_notion           # Notion-Verbindung testen
+```
+
+### Empfohlene Sicherheitspraktiken
+1. **API-Keys regelmäßig rotieren**
+2. **ADMIN_USERS auf Minimum beschränken**
+3. **Bot-Logs regelmäßig überprüfen**
+4. **Dependencies aktuell halten**
+5. **Rate-Limits bei Bedarf anpassen**
+
 ## 📈 Geplante Features
 
 - [ ] Termine bearbeiten/löschen über Menü
@@ -325,6 +422,7 @@ Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstütz
 - [ ] Web-Interface für Benutzerverwaltung
 - [ ] Mehrsprachige Oberfläche
 - [ ] Erweiterte Terminfilter
+- [ ] Encrypted Config Storage
 
 ## 🚀 Makefile Commands
 

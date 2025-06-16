@@ -6,15 +6,20 @@
 
 The following sensitive credentials are currently exposed in the repository:
 
-- **Telegram Bot Token**: `7734478807:AAEFG_pIeJQ26WQqKdBSab9TbJBVXAQ0Hfo`
-- **Gmail Password**: `uvye aans xjpz eoyt`
-- **Gmail Account**: `danischin92@gmail.com`
-- **Notion API Key**: `ntn_v63005206522GhXEQ0Qmm7usXuBb6XxZKpfef1VOsMB1GO`
+- **Telegram Bot Token**: `[REMOVED - Configure in .env]`
+- **Gmail Password**: `[REMOVED - Configure in .env]`
+- **Gmail Account**: `[REMOVED - Configure in .env]`
+- **Notion API Key**: `[REMOVED - Configure in .env]`
 
 **IMMEDIATE ACTIONS REQUIRED:**
 1. Regenerate all API keys and tokens immediately
 2. Remove sensitive data from version control
 3. Implement proper secret management
+
+**NOTE**: All credentials and secrets should be managed exclusively through:
+- `.env` file for application-wide secrets (never commit this file)
+- `users_config.json` for user-specific configurations (never commit this file)
+- Use the provided `.env.example` and `users_config.example.json` as templates
 
 ---
 
