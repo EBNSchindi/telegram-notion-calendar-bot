@@ -35,7 +35,7 @@ class BusinessCalendarSync:
         
         # Sync settings
         self.check_interval = self.global_config.get('email_check_interval', 300)  # 5 minutes
-        self.delete_after_processing = self.global_config.get('delete_after_processing', False)
+        self.delete_after_processing = self.global_config.get('delete_after_processing', True)  # Default to True
         
         # Email configuration from global config or user config
         self._setup_email_processor()
@@ -81,33 +81,49 @@ class BusinessCalendarSync:
     def _setup_notion_services(self):
         """Setup Notion services for business and shared calendars."""
         try:
-            # Business calendar (private) - use regular database
-            self.business_notion = NotionService(
-                notion_api_key=self.user_config.notion_api_key,
-                database_id=self.user_config.notion_database_id
-            )
-            
-            # Shared calendar - use shared database if available
-            if (self.user_config.shared_notion_api_key and 
-                self.user_config.shared_notion_database_id):
+            # 1. Setup Business Database (individual per user if configured)
+            if (hasattr(self.user_config, 'business_notion_api_key') and
+                hasattr(self.user_config, 'business_notion_database_id') and
+                self.user_config.business_notion_api_key and
+                self.user_config.business_notion_database_id):
                 
-                # Get business database ID from global config
-                business_db_id = self.global_config.get('business_notion_database_id')
-                
-                if business_db_id:
-                    # Use dedicated business database
-                    self.business_notion = NotionService(
-                        notion_api_key=self.user_config.shared_notion_api_key,
-                        database_id=business_db_id
-                    )
-                    logger.info(f"Using dedicated business database: {business_db_id}")
-                
-                # Setup shared calendar for team events
-                self.shared_notion = NotionService(
-                    notion_api_key=self.user_config.shared_notion_api_key,
-                    database_id=self.user_config.shared_notion_database_id
+                # User has individual business database
+                self.business_notion = NotionService(
+                    notion_api_key=self.user_config.business_notion_api_key,
+                    database_id=self.user_config.business_notion_database_id
                 )
-                logger.info("Shared calendar configured for team events")
+                logger.info(f"Using user's business database: {self.user_config.business_notion_database_id}")
+                
+            elif self.global_config.get('business_notion_database_id'):
+                # Fall back to global business database
+                business_api_key = (self.user_config.shared_notion_api_key or 
+                                  self.user_config.notion_api_key)
+                self.business_notion = NotionService(
+                    notion_api_key=business_api_key,
+                    database_id=self.global_config['business_notion_database_id']
+                )
+                logger.info(f"Using global business database: {self.global_config['business_notion_database_id']}")
+                
+            else:
+                # No business database - use private database
+                self.business_notion = NotionService(
+                    notion_api_key=self.user_config.notion_api_key,
+                    database_id=self.user_config.notion_database_id
+                )
+                logger.info("Using private database for business events (no business DB configured)")
+            
+            # 2. Setup Shared Database (global - used by all users)
+            shared_api_key = (self.global_config.get('shared_notion_api_key') or
+                            self.user_config.shared_notion_api_key)
+            shared_db_id = (self.global_config.get('shared_notion_database_id') or
+                          self.user_config.shared_notion_database_id)
+            
+            if shared_api_key and shared_db_id:
+                self.shared_notion = NotionService(
+                    notion_api_key=shared_api_key,
+                    database_id=shared_db_id
+                )
+                logger.info(f"Shared calendar configured: {shared_db_id}")
             else:
                 self.shared_notion = None
                 logger.warning("Shared calendar not configured")
@@ -130,9 +146,14 @@ class BusinessCalendarSync:
         logger.info(f"Starting business calendar sync for user {self.user_config.telegram_user_id}")
         logger.info(f"Check interval: {self.check_interval} seconds")
         
+        # Initial sync with up to 500 emails
+        logger.info("Running initial sync to process up to 500 emails")
+        await self.sync_business_calendars(is_initial=True)
+        
+        # Then continue with regular sync loop
         while True:
             try:
-                await self.sync_business_calendars()
+                await self.sync_business_calendars(is_initial=False)
                 await asyncio.sleep(self.check_interval)
                 
             except KeyboardInterrupt:
@@ -143,25 +164,28 @@ class BusinessCalendarSync:
                 self.stats['errors'] += 1
                 await asyncio.sleep(60)  # Wait 1 minute before retrying
     
-    async def sync_business_calendars(self):
+    async def sync_business_calendars(self, is_initial: bool = False):
         """Main synchronization method."""
         try:
-            logger.info("Starting business calendar sync")
+            logger.info(f"Starting business calendar sync (initial={is_initial})")
             
             # Create thread pool for email operations
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=1, thread_name_prefix="email-sync") as executor:
-                # Fetch unread emails in thread to avoid blocking
+                # Determine email fetch limit based on initial or regular run
+                fetch_limit = 500 if is_initial else 50
+                
+                # Fetch emails in thread to avoid blocking
                 emails = await loop.run_in_executor(
                     executor,
-                    self.email_processor.fetch_unread_emails
+                    lambda: self.email_processor.fetch_emails(limit=fetch_limit, is_initial=is_initial)
                 )
                 
                 if not emails:
-                    logger.debug("No unread emails found")
+                    logger.debug("No emails found")
                     return
                 
-                logger.info(f"Processing {len(emails)} unread emails")
+                logger.info(f"Processing {len(emails)} emails")
                 
                 for email_msg in emails:
                     try:
@@ -359,10 +383,20 @@ class BusinessCalendarSync:
             notion_service = self.shared_notion if use_shared else self.business_notion
             
             # Find existing appointment by outlook_id
-            # This would require extending the NotionService to search by custom fields
-            # For now, we'll create a new appointment
-            logger.info("Update existing appointment not yet implemented, creating new")
-            return False
+            page_id = notion_service.find_appointment_by_outlook_id(appointment.outlook_id)
+            
+            if page_id:
+                # Update the existing appointment
+                success = await notion_service.update_appointment(page_id, appointment)
+                if success:
+                    logger.info(f"Updated appointment with OutlookID {appointment.outlook_id}")
+                    return True
+                else:
+                    logger.error(f"Failed to update appointment with OutlookID {appointment.outlook_id}")
+                    return False
+            else:
+                logger.info(f"No existing appointment found with OutlookID {appointment.outlook_id}, will create new")
+                return False
             
         except Exception as e:
             logger.error(f"Error updating existing appointment: {e}")
@@ -371,10 +405,25 @@ class BusinessCalendarSync:
     async def _delete_business_event(self, business_event: BusinessEvent) -> bool:
         """Delete business event from Notion databases."""
         try:
-            # This would require extending NotionService to delete by outlook_id
-            logger.info(f"Delete operation not yet implemented for {business_event.outlook_ical_id}")
-            self.stats['events_deleted'] += 1
-            return True
+            # Delete from business database
+            deleted_business = self.business_notion.delete_appointment_by_outlook_id(
+                business_event.outlook_ical_id
+            )
+            
+            # If it's a team event, also delete from shared database
+            if business_event.is_team_event and self.shared_notion:
+                deleted_shared = self.shared_notion.delete_appointment_by_outlook_id(
+                    business_event.outlook_ical_id
+                )
+                logger.info(f"Deleted team event from both databases: {business_event.outlook_ical_id}")
+            
+            if deleted_business:
+                logger.info(f"Deleted business event: {business_event.outlook_ical_id}")
+                self.stats['events_deleted'] += 1
+                return True
+            else:
+                logger.warning(f"No event found to delete with OutlookID: {business_event.outlook_ical_id}")
+                return True  # Still return True as the event doesn't exist
             
         except Exception as e:
             logger.error(f"Error deleting business event: {e}")

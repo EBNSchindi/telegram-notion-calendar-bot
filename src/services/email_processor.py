@@ -135,30 +135,40 @@ class EmailProcessor:
         
         return self._connect()
     
-    def fetch_unread_emails(self, limit: int = 50) -> List[EmailMessage]:
+    def fetch_emails(self, limit: int = 50, is_initial: bool = False) -> List[EmailMessage]:
         """
-        Fetch unread emails from inbox with limit for performance.
+        Fetch emails from inbox with limit for performance.
+        For initial run, fetch all recent emails. Otherwise, fetch recent emails only.
         
         Args:
             limit: Maximum number of emails to fetch (default: 50)
+            is_initial: Whether this is the initial processing run (default: False)
         
         Returns:
-            List of unread email messages
+            List of email messages (read and unread from whitelist senders)
         """
         try:
             with self.imap_connection() as connection:
-                # Search for unread emails from today and yesterday only
+                # For initial run, fetch all recent emails. Otherwise, recent emails only
                 from datetime import datetime, timedelta
                 today = datetime.now()
-                yesterday = today - timedelta(days=1)
                 
-                # Search for recent unread emails
-                search_criteria = f'UNSEEN SINCE "{yesterday.strftime("%d-%b-%Y")}"'
+                if is_initial:
+                    # Search for ALL emails from last 7 days for initial processing
+                    last_week = today - timedelta(days=7)
+                    search_criteria = f'SINCE "{last_week.strftime("%d-%b-%Y")}"'
+                    logger.info("Initial processing: fetching all emails from last 7 days")
+                else:
+                    # Search for all emails from today and yesterday
+                    yesterday = today - timedelta(days=1)
+                    search_criteria = f'SINCE "{yesterday.strftime("%d-%b-%Y")}"'
+                    logger.info("Regular processing: fetching emails from last 2 days")
+                
                 status, messages = connection.search(None, search_criteria)
                 
                 if status != 'OK':
-                    logger.warning(f"Recent email search failed, falling back to all unread")
-                    status, messages = connection.search(None, 'UNSEEN')
+                    logger.warning(f"Email search failed, falling back to all emails")
+                    status, messages = connection.search(None, 'ALL')
                 
                 if status != 'OK':
                     logger.error(f"Failed to search emails: {status}")
@@ -169,10 +179,10 @@ class EmailProcessor:
                 
                 # Limit emails for performance
                 if total_emails > limit:
-                    logger.info(f"Found {total_emails} unread emails, processing latest {limit}")
+                    logger.info(f"Found {total_emails} emails, processing latest {limit}")
                     email_ids = email_ids[-limit:]  # Get the most recent emails
                 else:
-                    logger.info(f"Found {total_emails} unread emails")
+                    logger.info(f"Found {total_emails} emails")
                 
                 emails = []
                 for email_id in email_ids:
@@ -187,7 +197,7 @@ class EmailProcessor:
                 return emails
                 
         except Exception as e:
-            logger.error(f"Error fetching unread emails: {e}")
+            logger.error(f"Error fetching emails: {e}")
             return []
     
     def _fetch_email_by_id(self, connection: imaplib.IMAP4_SSL, email_id: str) -> Optional[EmailMessage]:
@@ -202,6 +212,7 @@ class EmailProcessor:
             EmailMessage object if successful, None otherwise
         """
         try:
+            # First fetch email body
             status, data = connection.fetch(email_id, '(RFC822)')
             
             if status != 'OK':
@@ -210,6 +221,18 @@ class EmailProcessor:
             
             email_body = data[0][1]
             email_message = email.message_from_bytes(email_body)
+            
+            # Then fetch flags separately
+            try:
+                flag_status, flag_data = connection.fetch(email_id, '(FLAGS)')
+                if flag_status == 'OK':
+                    flags_str = flag_data[0].decode() if isinstance(flag_data[0], bytes) else str(flag_data[0])
+                    is_unread = '\\Seen' not in flags_str
+                else:
+                    is_unread = True  # Default to unread if flags can't be fetched
+            except Exception as e:
+                logger.warning(f"Could not fetch flags for email {email_id}: {e}")
+                is_unread = True  # Default to unread
             
             # Extract email metadata
             subject = self._decode_header(email_message.get('Subject', ''))
@@ -225,7 +248,7 @@ class EmailProcessor:
                 sender=sender,
                 body=body,
                 date=date,
-                is_unread=True
+                is_unread=is_unread
             )
             
         except Exception as e:
@@ -449,8 +472,8 @@ if __name__ == "__main__":
     )
     
     try:
-        emails = processor.fetch_unread_emails()
-        print(f"Found {len(emails)} unread emails")
+        emails = processor.fetch_emails()
+        print(f"Found {len(emails)} emails")
         
         for email_msg in emails[:3]:  # Show first 3 emails
             print(f"Subject: {email_msg.subject}")

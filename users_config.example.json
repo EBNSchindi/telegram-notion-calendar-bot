@@ -9,6 +9,8 @@
       "notion_database_id": "your_private_database_id_1",
       "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
       "shared_notion_database_id": "your_shared_database_id",
+      "business_notion_api_key": "secret_xxx_your_business_notion_api_key",
+      "business_notion_database_id": "your_business_database_id",
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "08:00",
@@ -28,6 +30,8 @@
       "notion_database_id": "your_private_database_id_2",
       "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
       "shared_notion_database_id": "your_shared_database_id",
+      "business_notion_api_key": null,
+      "business_notion_database_id": null,
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "09:00",
@@ -48,16 +52,18 @@
       "Datum": "Date field (required)", 
       "Beschreibung": "Text field (optional)",
       "OutlookID": "Text field (for business events)",
-      "Organizer": "Text field (for business events)"
+      "Organizer": "Text field (for business events)",
+      "purpose": "Individual calendar for each user"
     },
     "shared_database": {
       "same_structure": "Identical to private database",
-      "purpose": "Team events visible to all users"
+      "purpose": "Global shared calendar - all users can access",
+      "note": "Team events are automatically saved here"
     },
     "business_database": {
       "same_structure": "Identical to private database", 
-      "purpose": "All business events from email processing",
-      "note": "Optional - can reuse shared database"
+      "purpose": "Individual business calendar (optional per user)",
+      "note": "Email sync events - if not configured, uses global business DB"
     }
   }
 }

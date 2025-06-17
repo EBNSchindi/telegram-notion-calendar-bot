@@ -14,9 +14,11 @@ class UserConfig:
     telegram_user_id: int
     telegram_username: str
     notion_api_key: str
-    notion_database_id: str  # Private database
-    shared_notion_api_key: str = None  # API key for shared database (can be same as private)
-    shared_notion_database_id: str = None  # Shared database ID
+    notion_database_id: str  # Private database (individual per user)
+    shared_notion_api_key: str = None  # API key for shared database (same for all users)
+    shared_notion_database_id: str = None  # Shared database ID (same for all users)
+    business_notion_api_key: str = None  # API key for business database (optional, individual)
+    business_notion_database_id: str = None  # Business database ID (optional, individual)
     timezone: str = 'Europe/Berlin'
     language: str = 'de'
     reminder_time: str = '08:00'  # Time for daily reminders
@@ -78,6 +80,10 @@ class UserConfigManager:
                         'telegram_username': user.telegram_username,
                         'notion_api_key': user.notion_api_key,
                         'notion_database_id': user.notion_database_id,
+                        'shared_notion_api_key': user.shared_notion_api_key,
+                        'shared_notion_database_id': user.shared_notion_database_id,
+                        'business_notion_api_key': user.business_notion_api_key,
+                        'business_notion_database_id': user.business_notion_database_id,
                         'timezone': user.timezone,
                         'language': user.language,
                         'reminder_time': user.reminder_time,
@@ -110,6 +116,8 @@ class UserConfigManager:
                 notion_database_id=default.notion_database_id,
                 shared_notion_api_key=getattr(default, 'shared_notion_api_key', None),
                 shared_notion_database_id=getattr(default, 'shared_notion_database_id', None),
+                business_notion_api_key=getattr(default, 'business_notion_api_key', None),
+                business_notion_database_id=getattr(default, 'business_notion_database_id', None),
                 timezone=getattr(default, 'timezone', 'Europe/Berlin'),
                 language=getattr(default, 'language', 'de'),
                 reminder_time=getattr(default, 'reminder_time', '08:00'),

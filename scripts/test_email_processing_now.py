@@ -246,7 +246,7 @@ async def test_single_user_sync():
         elif stats['errors'] > 0:
             print(f"\n⚠️ WARNING: {stats['errors']} errors occurred during processing")
         else:
-            print("\n📭 INFO: No new unread emails found")
+            print("\n📭 INFO: No new emails found")
         
         # Verify results in Notion database
         print("\n🔍 Verifying results in Notion database...")

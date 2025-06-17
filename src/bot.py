@@ -17,15 +17,9 @@ from src.handlers.debug_handler import DebugHandler
 from src.services.enhanced_reminder_service import EnhancedReminderService
 from src.services.business_calendar_sync import create_sync_manager_from_env
 
-# Enable logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.StreamHandler(),  # Console output
-        logging.FileHandler('bot.log')  # Also log to file
-    ]
-)
+# Enable secure logging with data sanitization
+from utils.log_sanitizer import setup_secure_logging
+setup_secure_logging('bot.log', 'INFO')
 logger = logging.getLogger(__name__)
 
 

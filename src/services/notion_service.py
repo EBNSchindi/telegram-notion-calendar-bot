@@ -138,7 +138,7 @@ class NotionService:
             logger.error(f"Failed to update appointment in Notion: {e}")
             raise
     
-    async def delete_appointment(self, page_id: str) -> bool:
+    def delete_appointment(self, page_id: str) -> bool:
         """
         Delete an appointment from Notion (archive it).
         
@@ -160,6 +160,62 @@ class NotionService:
         except APIResponseError as e:
             logger.error(f"Failed to delete appointment in Notion: {e}")
             raise
+    
+    def find_appointment_by_outlook_id(self, outlook_id: str) -> Optional[str]:
+        """
+        Find an appointment by its Outlook ID.
+        
+        Args:
+            outlook_id: The Outlook ID to search for
+        
+        Returns:
+            Page ID if found, None otherwise
+        """
+        try:
+            # Query the database for the specific OutlookID
+            response = self.client.databases.query(
+                database_id=self.database_id,
+                filter={
+                    "property": "OutlookID",
+                    "rich_text": {
+                        "equals": outlook_id
+                    }
+                }
+            )
+            
+            if response['results']:
+                page_id = response['results'][0]['id']
+                logger.info(f"Found appointment with OutlookID {outlook_id}: {page_id}")
+                return page_id
+            
+            logger.debug(f"No appointment found with OutlookID: {outlook_id}")
+            return None
+            
+        except APIResponseError as e:
+            logger.error(f"Failed to search by OutlookID: {e}")
+            return None
+    
+    def delete_appointment_by_outlook_id(self, outlook_id: str) -> bool:
+        """
+        Delete an appointment by its Outlook ID.
+        
+        Args:
+            outlook_id: The Outlook ID of the appointment to delete
+        
+        Returns:
+            bool: True if deleted successfully, False otherwise
+        """
+        try:
+            page_id = self.find_appointment_by_outlook_id(outlook_id)
+            if page_id:
+                return self.delete_appointment(page_id)
+            
+            logger.warning(f"No appointment found to delete with OutlookID: {outlook_id}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error deleting by OutlookID: {e}")
+            return False
     
     async def test_connection(self) -> bool:
         """

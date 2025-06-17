@@ -115,7 +115,7 @@ python src/bot.py
 ### Log-Ausgaben
 ```
 2025-06-11 20:45:14 - INFO - Business calendar sync started
-2025-06-11 20:45:15 - INFO - Found 3 unread emails
+2025-06-11 20:45:15 - INFO - Found 3 emails
 2025-06-11 20:45:16 - INFO - Parsed event: Team Meeting (Create)
 2025-06-11 20:45:17 - INFO - Saved business event to business database
 2025-06-11 20:45:18 - INFO - Successfully processed email xyz123
