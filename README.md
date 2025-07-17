@@ -10,11 +10,13 @@ Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Suppo
 - Automatische Menü-Öffnung beim Chat-Start
 - ForceReply für einfache Terminerfassung
 
-### 👥 **Multi-User & Dual-Database Support**
+### 👥 **Multi-User & Triple-Database Support**
 - **Private Datenbank**: Persönliche Termine pro Nutzer
 - **Gemeinsame Datenbank**: Termine für alle Nutzer sichtbar
-- Automatische Kombination beider Datenquellen
+- **Business Datenbank**: Automatische E-Mail-Synchronisation von Outlook/Gmail
+- Automatische Kombination aller Datenquellen
 - Individuelle Konfiguration pro Benutzer
+- **Intelligente User-Validierung**: Ungültige Platzhalter-Konfigurationen werden automatisch ignoriert
 
 ### 🗓 **Intelligente Datums- und Zeitverarbeitung**
 - **Wochentag-Erkennung**: `Sonntag`, `Montag`, `Freitag` → automatisch nächster Termin
@@ -24,9 +26,12 @@ Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Suppo
 - **Relativ**: `heute`, `morgen`, `übermorgen`
 - Robuste Fehlerbehandlung
 
-### 📨 **Intelligente Erinnerungen**
-- Kombiniert Termine aus beiden Datenbanken
-- Kennzeichnung der Terminquelle (👤 privat / 🌐 gemeinsam)
+### 📨 **Intelligente Erinnerungen & Business Email Integration**
+- Kombiniert Termine aus allen drei Datenbanken
+- Kennzeichnung der Terminquelle (👤 privat / 🌐 gemeinsam / 📧 business)
+- **Automatische E-Mail-Synchronisation**: Gmail/Outlook-Kalender-Events
+- **Sender-Whitelist**: Sicherheitsfilter für vertrauenswürdige E-Mail-Absender
+- **JSON-basierte Event-Parsing**: Intelligente Terminextraktion aus E-Mails
 - Konfigurierbare Erinnerungszeit
 - Vorschau-Funktion
 
@@ -122,12 +127,27 @@ pip install -r requirements.txt
 ```
 
 ### 2. Umgebungsvariablen (.env)
+
+⚠️ **Wichtig**: Kopiere `.env.example` zu `.env` und trage deine echten Credentials ein.
+
 ```env
 # Telegram Bot Token (für alle Nutzer gleich)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+
+# Business Email Integration (optional)
+EMAIL_SYNC_ENABLED=true
+EMAIL_ADDRESS=your_gmail_address@gmail.com
+EMAIL_PASSWORD=your_gmail_app_password
+OUTLOOK_SENDER_WHITELIST=trusted_sender@company.com
+
+# Sicherheitseinstellungen
+AUTHORIZED_USERS=123456789,987654321
 ```
 
 ### 3. Benutzerkonfiguration (users_config.json)
+
+⚠️ **Wichtig**: Kopiere `users_config.example.json` zu `users_config.json` und trage echte Credentials ein.
+
 ```json
 {
   "users": [
@@ -138,6 +158,8 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
       "notion_database_id": "private_database_id_user1",
       "shared_notion_api_key": "secret_shared_api_key",
       "shared_notion_database_id": "shared_database_id",
+      "business_notion_api_key": "secret_business_api_key",
+      "business_notion_database_id": "business_database_id",
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "08:00",
@@ -146,6 +168,12 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
   ]
 }
 ```
+
+🔒 **Sicherheitsfeatures:**
+- **Automatische Platzhalter-Erkennung**: Ungültige Configs werden ignoriert
+- **Mindestens-ein-User-Validierung**: Bot startet nur mit gültigen Usern
+- **API-Key-Validierung**: Prüft auf echte Notion-API-Keys (beginnen mit `secret_` oder `ntn_`)
+- **Database-ID-Validierung**: Prüft auf gültige Notion-Database-IDs
 
 ### 4. Bot starten
 ```bash
@@ -215,15 +243,24 @@ python src/bot.py
 ### Private Datenbank (pro Nutzer)
 Jeder Nutzer benötigt eine eigene Notion-Datenbank mit:
 
-| Property | Type | Erforderlich |
-|----------|------|-------------|
-| Title | Title | ✅ |
-| Datum | Date | ✅ |
-| Beschreibung | Text | ❌ |
-| Created | Date | ✅ |
+| Property | Type | Erforderlich | Zweck |
+|----------|------|-------------|-------|
+| Name | Title | ✅ | Termintitel |
+| Datum | Date | ✅ | Terminzeit |
+| Beschreibung | Text | ❌ | Zusatzinfo |
+| OutlookID | Text | ❌ | Business Email Integration |
+| Organizer | Text | ❌ | Business Email Integration |
+| Created | Date | ✅ | Erstellzeit |
 
 ### Gemeinsame Datenbank
-Eine zentrale Datenbank für alle Nutzer mit derselben Struktur.
+Eine zentrale Datenbank für alle Nutzer mit derselben Struktur wie die Private Datenbank.
+
+### Business Datenbank (optional)
+Für automatische E-Mail-Synchronisation:
+- **Gleiche Struktur** wie Private/Shared Datenbank
+- **OutlookID**: Eindeutige Identifikation von E-Mail-Events
+- **Organizer**: Automatisch aus E-Mail-Absender extrahiert
+- **Automatische Updates**: Termine werden bei E-Mail-Änderungen aktualisiert
 
 ## 🎯 Features im Detail
 
@@ -248,8 +285,10 @@ Unterstützte Wochentage:
    Persönliche Notiz
 🌐 14:00 - Team Meeting
    Gemeinsamer Termin für alle
+📧 16:00 - Daily Standup
+   Automatisch aus E-Mail synchronisiert
 
-👤 Private Termine | 🌐 Gemeinsame Termine
+👤 Private Termine | 🌐 Gemeinsame Termine | 📧 Business Termine
 ```
 
 ### Erweiterte Zeitformate
@@ -390,6 +429,10 @@ Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstütz
 - ✅ **JSON Size Limits**: Schutz vor großen Payloads (50KB Email, 10KB JSON)
 - ✅ **Sichere Fehlerbehandlung**: Keine Exposition interner Fehlerdetails
 - ✅ **HTML-Escaping**: XSS-Schutz für alle Benutzereingaben
+- ✅ **Automatische Config-Validierung**: Ungültige Platzhalter-User werden ignoriert
+- ✅ **Mindestens-ein-User-Validierung**: Bot startet nur mit gültigen Konfigurationen
+- ✅ **E-Mail-Sender-Whitelist**: Nur vertrauenswürdige Absender können Events erstellen
+- ✅ **Credential-Schutz**: .env und users_config.json werden automatisch von Version Control ausgeschlossen
 
 ### Sicherheitskonfiguration
 ```env
@@ -423,6 +466,9 @@ ENVIRONMENT=production          # production/development/testing
 - [ ] Mehrsprachige Oberfläche
 - [ ] Erweiterte Terminfilter
 - [ ] Encrypted Config Storage
+- [ ] Exchange/Office365 Integration
+- [ ] Kalender-Synchronisation zwischen Usern
+- [ ] Erweiterte E-Mail-Parsing-Regeln
 
 ## 🚀 Makefile Commands
 

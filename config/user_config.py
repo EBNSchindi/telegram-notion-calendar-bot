@@ -64,7 +64,9 @@ class UserConfigManager:
                 with open(self.config_file, 'r') as f:
                     data = json.load(f)
                     for user_data in data.get('users', []):
-                        user = UserConfig(**user_data)
+                        # Filter out comment fields that start with underscore
+                        filtered_data = {k: v for k, v in user_data.items() if not k.startswith('_')}
+                        user = UserConfig(**filtered_data)
                         self._users[user.telegram_user_id] = user
                 logger.info(f"Loaded {len(self._users)} user configurations")
             except Exception as e:
@@ -145,10 +147,99 @@ class UserConfigManager:
         """Get all user configurations."""
         return self._users.copy()
     
+    def is_valid_notion_key(self, api_key: str) -> bool:
+        """Check if a Notion API key is valid (not a placeholder)."""
+        if not api_key:
+            return False
+        
+        # Check for common placeholder patterns
+        placeholder_patterns = [
+            'secret_xxx_',
+            'your_notion_',
+            'your_private_',
+            'your_shared_',
+            'your_business_',
+            'secret_your_',
+            'your_global_'
+        ]
+        
+        api_key_lower = api_key.lower()
+        for pattern in placeholder_patterns:
+            if pattern in api_key_lower:
+                return False
+        
+        # Valid Notion API keys should start with 'secret_' or 'ntn_'
+        return api_key.startswith(('secret_', 'ntn_'))
+    
+    def is_valid_database_id(self, database_id: str) -> bool:
+        """Check if a database ID is valid (not a placeholder)."""
+        if not database_id:
+            return False
+        
+        # Check for common placeholder patterns
+        placeholder_patterns = [
+            'your_notion_',
+            'your_private_',
+            'your_shared_',
+            'your_business_',
+            'your_global_'
+        ]
+        
+        database_id_lower = database_id.lower()
+        for pattern in placeholder_patterns:
+            if pattern in database_id_lower:
+                return False
+        
+        # Valid database IDs should be hexadecimal and reasonably long (at least 30 chars)
+        # Notion database IDs can vary in length but are typically 31-32 characters
+        clean_id = database_id.replace('-', '').replace('_', '')
+        return len(clean_id) >= 30 and all(c in '0123456789abcdef' for c in clean_id.lower())
+    
+    def is_user_config_valid(self, user_config: UserConfig) -> bool:
+        """Check if a user configuration has valid Notion credentials."""
+        # Check required fields
+        if not self.is_valid_notion_key(user_config.notion_api_key):
+            return False
+        
+        if not self.is_valid_database_id(user_config.notion_database_id):
+            return False
+        
+        # Check shared database if configured
+        if user_config.shared_notion_api_key:
+            if not self.is_valid_notion_key(user_config.shared_notion_api_key):
+                return False
+        
+        if user_config.shared_notion_database_id:
+            if not self.is_valid_database_id(user_config.shared_notion_database_id):
+                return False
+        
+        # Business database is optional, but if configured, should be valid
+        if user_config.business_notion_api_key:
+            if not self.is_valid_notion_key(user_config.business_notion_api_key):
+                return False
+        
+        if user_config.business_notion_database_id:
+            if not self.is_valid_database_id(user_config.business_notion_database_id):
+                return False
+        
+        return True
+    
+    def get_valid_users(self) -> Dict[int, UserConfig]:
+        """Get only users with valid Notion configurations."""
+        valid_users = {}
+        for user_id, user_config in self._users.items():
+            if user_config.telegram_user_id != 0 and self.is_user_config_valid(user_config):
+                valid_users[user_id] = user_config
+            elif user_config.telegram_user_id != 0:
+                logger.warning(f"User {user_id} has invalid Notion configuration, skipping")
+        
+        return valid_users
+    
     def get_users_for_reminders(self, current_time: str) -> list[UserConfig]:
         """Get users who should receive reminders at the current time."""
         users = []
-        for user in self._users.values():
+        valid_users = self.get_valid_users()
+        for user in valid_users.values():
             if user.reminder_enabled and user.reminder_time == current_time:
                 users.append(user)
         return users

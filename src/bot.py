@@ -56,13 +56,12 @@ class EnhancedCalendarBot:
                 f'Hallo {update.effective_user.mention_html()}! 👋\n\n'
                 '❌ Du bist noch nicht konfiguriert.\n\n'
                 'Bitte kontaktiere den Administrator, um deine Notion-Verbindung einzurichten.\n\n'
-                '*Benötigte Informationen:*\n'
-                f'• Deine Telegram User ID: `{user_id}`\n'
+                '<b>Benötigte Informationen:</b>\n'
+                f'• Deine Telegram User ID: <code>{user_id}</code>\n'
                 '• Notion API Key für private Datenbank\n'
                 '• Private Notion Database ID\n'
                 '• Notion API Key für gemeinsame Datenbank\n'
-                '• Gemeinsame Notion Database ID',
-                parse_mode='Markdown'
+                '• Gemeinsame Notion Database ID'
             )
             return
         
@@ -299,15 +298,24 @@ class EnhancedCalendarBot:
         try:
             self.business_sync_manager = create_sync_manager_from_env()
             
-            # Add all configured users to business sync
-            for user_config in self.user_config_manager._users.values():
-                if user_config.telegram_user_id != 0:  # Skip default user
-                    self.business_sync_manager.add_user(user_config)
+            # Add only valid users to business sync
+            valid_users = self.user_config_manager.get_valid_users()
+            
+            if not valid_users:
+                logger.error("No valid users configured! At least one user with valid Notion credentials is required.")
+                logger.error("Please check your users_config.json file and ensure at least one user has:")
+                logger.error("- Valid notion_api_key (starts with 'secret_' or 'ntn_')")
+                logger.error("- Valid notion_database_id (32 character UUID)")
+                logger.error("- No placeholder values like 'your_notion_' or 'secret_xxx_'")
+                sys.exit(1)
+            
+            for user_config in valid_users.values():
+                self.business_sync_manager.add_user(user_config)
             
             # Start business sync in background
             if self.business_sync_manager.user_syncs:
                 asyncio.create_task(self.business_sync_manager.start_all_syncs())
-                logger.info("Business calendar sync started")
+                logger.info(f"Business calendar sync started for {len(valid_users)} valid users")
             else:
                 logger.info("No users configured for business calendar sync")
                 
