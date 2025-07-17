@@ -135,13 +135,13 @@ class EmailProcessor:
         
         return self._connect()
     
-    def fetch_emails(self, limit: int = 50, is_initial: bool = False) -> List[EmailMessage]:
+    def fetch_emails(self, limit: int = 200, is_initial: bool = False) -> List[EmailMessage]:
         """
         Fetch emails from inbox with limit for performance.
         For initial run, fetch all recent emails. Otherwise, fetch recent emails only.
         
         Args:
-            limit: Maximum number of emails to fetch (default: 50)
+            limit: Maximum number of emails to fetch (default: 200 for 30-day window)
             is_initial: Whether this is the initial processing run (default: False)
         
         Returns:
@@ -154,15 +154,15 @@ class EmailProcessor:
                 today = datetime.now()
                 
                 if is_initial:
-                    # Search for ALL emails from last 7 days for initial processing
-                    last_week = today - timedelta(days=7)
-                    search_criteria = f'SINCE "{last_week.strftime("%d-%b-%Y")}"'
-                    logger.info("Initial processing: fetching all emails from last 7 days")
+                    # Search for ALL emails from last 30 days for initial processing
+                    last_month = today - timedelta(days=30)
+                    search_criteria = f'SINCE "{last_month.strftime("%d-%b-%Y")}"'
+                    logger.info("Initial processing: fetching all emails from last 30 days")
                 else:
-                    # Search for all emails from today and yesterday
-                    yesterday = today - timedelta(days=1)
-                    search_criteria = f'SINCE "{yesterday.strftime("%d-%b-%Y")}"'
-                    logger.info("Regular processing: fetching emails from last 2 days")
+                    # Search for all emails from last 30 days for regular processing
+                    last_month = today - timedelta(days=30)
+                    search_criteria = f'SINCE "{last_month.strftime("%d-%b-%Y")}"'
+                    logger.info("Regular processing: fetching emails from last 30 days")
                 
                 status, messages = connection.search(None, search_criteria)
                 
