@@ -224,6 +224,12 @@ DELETE_AFTER_PROCESSING=true
 OUTLOOK_SENDER_WHITELIST=trusted_sender@company.com,another@company.com
 ```
 
+#### E-Mail-Verarbeitung
+- **Zeitraum**: 30 Tage Rückblick (erweitert für umfassende Synchronisation)
+- **Initial Sync**: 1000 E-Mails aus den letzten 30 Tagen
+- **Regelmäßiger Sync**: 200 E-Mails alle 5 Minuten (konfigurierbar)
+- **Automatische Bereinigung**: Verarbeitete E-Mails werden gelöscht (optional)
+
 #### Unterstützte E-Mail-Provider
 - ✅ **Gmail**: Mit App-Passwort
 - ✅ **Google Workspace**: Mit App-Passwort
