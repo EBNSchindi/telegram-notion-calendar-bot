@@ -30,6 +30,8 @@ Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Suppo
 - Kombiniert Termine aus allen drei Datenbanken
 - Kennzeichnung der Terminquelle (👤 privat / 🌐 gemeinsam / 📧 business)
 - **Automatische E-Mail-Synchronisation**: Gmail/Outlook-Kalender-Events
+- **Erweiterte Reichweite**: 30 Tage Rückblick für umfassende Synchronisation
+- **Optimierte Verarbeitung**: 1000 E-Mails (initial) / 200 E-Mails (regulär)
 - **Sender-Whitelist**: Sicherheitsfilter für vertrauenswürdige E-Mail-Absender
 - **JSON-basierte Event-Parsing**: Intelligente Terminextraktion aus E-Mails
 - Konfigurierbare Erinnerungszeit
@@ -383,6 +385,20 @@ docker run -d \
 - Die `.env` Datei wird über `--env-file` eingebunden
 - `users_config.json` wird als Volume gemountet
 - Container startet automatisch neu bei Fehlern
+
+## 📋 Changelog
+
+### Version 2.1.0 (2025-01-17)
+- **🚀 Erweiterte Email-Synchronisation**
+  - Email-Zeitraum von 2 Tagen auf **30 Tage** erweitert
+  - Verarbeitungslimits erhöht: 1000 (initial) / 200 (regulär) E-Mails
+  - Umfassende Synchronisation für bessere Vollständigkeit
+  - Optimierte Performance bei größeren Email-Mengen
+  
+- **📚 Dokumentation**
+  - Aktualisierte API-Referenz mit neuen Email-Parametern
+  - Vollständige Refactoring-Analyse durchgeführt
+  - Sicherheitsverbesserungen dokumentiert
 
 ## 🐛 Fehlerbehebung
 

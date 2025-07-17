@@ -10,7 +10,7 @@
       "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
       "shared_notion_database_id": "your_shared_database_id",
       "business_notion_api_key": "secret_xxx_your_business_notion_api_key",
-      "business_notion_database_id": "your_business_database_id",
+      "business_notion_database_id": "1d71778a50cc804e8796dab3dc69eca2",
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "08:00",

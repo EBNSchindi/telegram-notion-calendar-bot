@@ -173,7 +173,8 @@ class BusinessCalendarSync:
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=1, thread_name_prefix="email-sync") as executor:
                 # Determine email fetch limit based on initial or regular run
-                fetch_limit = 500 if is_initial else 50
+                # Increased limits for 30-day processing window
+                fetch_limit = 1000 if is_initial else 200
                 
                 # Fetch emails in thread to avoid blocking
                 emails = await loop.run_in_executor(
