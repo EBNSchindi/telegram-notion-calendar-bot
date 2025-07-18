@@ -55,6 +55,9 @@ Jeder User benötigt eine eigene private Datenbank:
 | **Name** | Title | ✅ | Terminbezeichnung |
 | **Datum** | Date | ✅ | Termin Datum/Zeit (mit Zeit-Support) |
 | **Beschreibung** | Text | ❌ | Detaillierte Beschreibung |
+| **Ort** | Text | ❌ | Terminort (für AI-Features) |
+| **Tags** | Text | ❌ | Komma-separierte Tags |
+| **PartnerRelevant** | Checkbox | ✅ | **AI-Feature: Partner-Relevanz** |
 | **OutlookID** | Text | ❌ | Eindeutige ID für Business Events |
 | **Organizer** | Text | ❌ | Organisator/Absender |
 
@@ -316,8 +319,8 @@ Für **automatische E-Mail-Synchronisation**:
 
 **Lösung**:
 1. Überprüfen Sie die Feldnamen (Groß-/Kleinschreibung!)
-2. **Erforderlich**: Name (Title), Datum (Date)
-3. **Optional**: Beschreibung, OutlookID, Organizer
+2. **Erforderlich**: Name (Title), Datum (Date), PartnerRelevant (Checkbox)
+3. **Optional**: Beschreibung, Ort, Tags, OutlookID, Organizer
 
 ### \"No valid users configured\"
 
