@@ -21,6 +21,13 @@
         "Automatische Outlook-Event-Verarbeitung", 
         "Team-Event-Routing zu Shared Database",
         "JSON-Extraktion aus Email-Body"
+      ],
+      "_ai_features": [
+        "GPT-4o-mini Integration für natürliche Sprachverarbeitung",
+        "Intelligente Terminextraktion aus beliebigen Texten",
+        "Partner-Relevanz-Abfrage mit interaktiven Buttons",
+        "Automatische Titel-Optimierung für deutsche Sprache",
+        "Fallback-Modus wenn AI-Service nicht verfügbar"
       ]
     },
     {
@@ -41,7 +48,7 @@
   "_setup_instructions": {
     "step_1": "Telegram User ID ermitteln - wird beim ersten /start angezeigt",
     "step_2": "Notion Integrationen erstellen und API Keys kopieren",
-    "step_3": "Notion Datenbanken erstellen mit Feldern: Name, Datum, Beschreibung, OutlookID, Organizer",
+    "step_3": "Notion Datenbanken erstellen mit Feldern: Name, Datum, Beschreibung, Ort, Tags, PartnerRelevant, OutlookID, Organizer",
     "step_4": "Gmail App-Passwort für Email-Integration erstellen",
     "step_5": "Umgebungsvariablen in .env konfigurieren",
     "step_6": "Bot starten mit: python src/bot.py"
@@ -51,6 +58,9 @@
       "Name": "Title field (required)",
       "Datum": "Date field (required)", 
       "Beschreibung": "Text field (optional)",
+      "Ort": "Text field (optional, for location)",
+      "Tags": "Text field (optional, comma-separated)",
+      "PartnerRelevant": "Checkbox field (required for AI features)",
       "OutlookID": "Text field (for business events)",
       "Organizer": "Text field (for business events)",
       "purpose": "Individual calendar for each user"

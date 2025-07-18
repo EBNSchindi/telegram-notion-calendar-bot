@@ -243,7 +243,7 @@ class EnhancedCalendarBot:
         
         # Check if this is a reply to ForceReply (appointment input from menu)
         if update.message.reply_to_message and "Gib deinen Termin ein" in update.message.reply_to_message.text:
-            # Treat this as /add command
+            # Use AI-powered appointment extraction
             user_id = update.effective_user.id
             handler = self.get_appointment_handler(user_id)
             
@@ -254,16 +254,50 @@ class EnhancedCalendarBot:
                 )
                 return
             
-            # Parse the message as /add command arguments
-            args = update.message.text.strip().split()
-            context.args = args  # Set args for the handler
-            
-            await handler.add_appointment(update, context)
+            # Process with AI assistant
+            await handler.process_ai_appointment_message(update, context)
             return
+        
+        # Check if message looks like appointment input (contains time patterns)
+        message_text = update.message.text.lower()
+        time_patterns = [
+            r'\d{1,2}:\d{2}',  # 14:00
+            r'\d{1,2}\.\d{2}',  # 14.30
+            r'\d{1,2} uhr',     # 14 uhr
+            r'\d{1,2} pm',      # 3 pm
+            r'\d{1,2} am',      # 9 am
+            r'halb \d{1,2}',    # halb 3
+            r'halb',            # halb
+            r'viertel',         # viertel patterns
+            r'quarter',         # english quarter patterns
+        ]
+        
+        date_patterns = [
+            r'heute', r'morgen', r'übermorgen',
+            r'today', r'tomorrow',
+            r'montag', r'dienstag', r'mittwoch', r'donnerstag', r'freitag', r'samstag', r'sonntag',
+            r'monday', r'tuesday', r'wednesday', r'thursday', r'friday', r'saturday', r'sunday',
+            r'\d{1,2}\.\d{1,2}\.\d{2,4}', r'\d{4}-\d{1,2}-\d{1,2}',  # date formats
+            r'nächste', r'nächsten',  # next week patterns
+        ]
+        
+        # Check if message contains appointment-like patterns
+        import re
+        has_time = any(re.search(pattern, message_text) for pattern in time_patterns)
+        has_date = any(re.search(pattern, message_text) for pattern in date_patterns)
+        
+        if has_time or has_date:
+            user_id = update.effective_user.id
+            handler = self.get_appointment_handler(user_id)
+            
+            if handler:
+                await handler.process_ai_appointment_message(update, context)
+                return
         
         await update.message.reply_text(
             "Ich habe deine Nachricht erhalten! 📨\n\n"
-            "💡 Nutze /start für das Hauptmenü oder /help für alle Befehle!"
+            "💡 Nutze /start für das Hauptmenü oder /help für alle Befehle!\n"
+            "🤖 Oder sende mir einfach deinen Termin (z.B. 'morgen 14:00 Zahnarzttermin')"
         )
     
     async def post_init(self, application: Application) -> None:

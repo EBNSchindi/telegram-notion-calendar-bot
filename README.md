@@ -4,6 +4,14 @@ Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Suppo
 
 ## ✨ Features
 
+### 🤖 **AI-Powered Features (NEW!)**
+- **GPT-4o-mini Integration**: Intelligente Verarbeitung natürlicher Sprache
+- **Smart Appointment Extraction**: Automatische Terminextraktion aus beliebigen Texten
+- **Optimierte Titel-Generierung**: "Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama"
+- **Partner-Relevanz-Abfrage**: Interaktive Ja/Nein-Buttons für relevante Termine
+- **Fallback-Modus**: Funktioniert auch ohne AI-Service
+- **Unterstützte Sprachen**: Deutsch und Englisch mit intelligenter Erkennung
+
 ### 🎛 **Visuelles Hauptmenü**
 - Intuitive Bedienung mit Inline-Buttons
 - Schneller Zugriff auf alle Funktionen
@@ -136,6 +144,9 @@ pip install -r requirements.txt
 # Telegram Bot Token (für alle Nutzer gleich)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 
+# OpenAI Configuration (für AI-Features)
+OPENAI_API_KEY=your_openai_api_key_here
+
 # Business Email Integration (optional)
 EMAIL_SYNC_ENABLED=true
 EMAIL_ADDRESS=your_gmail_address@gmail.com
@@ -199,11 +210,26 @@ python src/bot.py
 | `/list` | Alle kommenden Termine |
 
 ### Termine erstellen
+
+#### 🤖 **AI-Modus (Empfohlen)**
+Sende einfach deine Terminwünsche in natürlicher Sprache - der Bot versteht dich automatisch:
+
+```bash
+# Natürliche Sprache - funktioniert automatisch
+"morgen 15 Uhr Zahnarzttermin"
+"heute 16 Uhr Mama im Krankenhaus besuchen"
+"nächsten Montag 9 Uhr Meeting mit Team im Büro"
+"übermorgen 14:30 Friseurtermin bei Salon Müller"
+```
+
+Der Bot fragt dann automatisch: **"Ist dieser Termin auch für deine Partnerin relevant?"**
+
+#### 📝 **Klassischer Modus**
 ```bash
 /add <Datum> <Zeit> <Titel> [Beschreibung]
 ```
 
-**Neue Beispiele mit Wochentag-Erkennung:**
+**Beispiele mit Wochentag-Erkennung:**
 ```bash
 # Wochentage (automatisch nächster Termin)
 /add Sonntag 17 Uhr Sasi
@@ -250,6 +276,9 @@ Jeder Nutzer benötigt eine eigene Notion-Datenbank mit:
 | Name | Title | ✅ | Termintitel |
 | Datum | Date | ✅ | Terminzeit |
 | Beschreibung | Text | ❌ | Zusatzinfo |
+| Ort | Text | ❌ | Terminort |
+| Tags | Text | ❌ | Komma-separierte Tags |
+| **PartnerRelevant** | **Checkbox** | ✅ | **AI-Feature: Partner-Relevanz** |
 | OutlookID | Text | ❌ | Business Email Integration |
 | Organizer | Text | ❌ | Business Email Integration |
 | Created | Date | ✅ | Erstellzeit |
@@ -388,6 +417,30 @@ docker run -d \
 
 ## 📋 Changelog
 
+### Version 2.2.0 (2025-07-18) - AI Revolution 🤖
+- **🤖 GPT-4o-mini Integration**
+  - Natürliche Sprachverarbeitung für Terminerfassung
+  - Intelligente Terminextraktion aus beliebigen Texten
+  - Optimierte Prompt-Engineering für deutsche Sprache
+  - Automatische Titel-Optimierung ("Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama")
+  
+- **💬 Partner-Relevanz-Feature**
+  - Interaktive Ja/Nein-Abfrage mit Inline-Buttons
+  - Automatische Speicherung als Notion-Checkbox
+  - Intelligente Kontexterfassung für bessere Entscheidungen
+  
+- **🎯 Verbesserte Terminverarbeitung**
+  - Unterstützung für komplexe deutsche Zeitangaben
+  - Automatische Orts- und Beschreibungserkennung
+  - Robuste Fehlerbehandlung mit Fallback-Modus
+  - OPENAI_API_KEY Umgebungsvariable
+
+- **🛠 Technische Verbesserungen**
+  - Erweiterte Fehlerbehandlung und Logging
+  - Optimierte Callback-Handler für bessere UX
+  - Konsistente Timezone-Behandlung
+  - Vollständige Dokumentation aller AI-Features
+
 ### Version 2.1.0 (2025-01-17)
 - **🚀 Erweiterte Email-Synchronisation**
   - Email-Zeitraum von 2 Tagen auf **30 Tage** erweitert
@@ -402,22 +455,48 @@ docker run -d \
 
 ## 🐛 Fehlerbehebung
 
-### "Du bist noch nicht konfiguriert"
+### 🤖 AI-Features
+
+#### "🤖 KI-Assistent ist derzeit nicht verfügbar"
+1. `OPENAI_API_KEY` in `.env` Datei prüfen
+2. API-Key von https://platform.openai.com/api-keys erstellen
+3. Bot neu starten nach Änderung der `.env`
+
+#### "❌ Ich konnte keine Termininformationen erkennen"
+1. **Klarere Formulierung**: "morgen 15 Uhr Zahnarzttermin"
+2. **Zeit angeben**: "heute 16:30" statt "heute nachmittag"
+3. **Fallback nutzen**: `/add morgen 15:00 Zahnarzttermin`
+
+#### "'str' object has no attribute 'date'" - Fehler
+✅ **Behoben!** Dieser Fehler trat nach Partner-Relevanz-Abfrage auf und wurde in Version 2.2.0 behoben.
+
+### 📅 Allgemeine Termine
+
+#### "Du bist noch nicht konfiguriert"
 1. Telegram User ID ermitteln (wird beim ersten `/start` angezeigt)
 2. User in `users_config.json` hinzufügen
 3. Bot neu starten
 
-### "Ungültiges Datum: Sonntag"
+#### "Ungültiges Datum: Sonntag"
 ✅ **Behoben!** Der Bot erkennt jetzt automatisch Wochentage und wählt den nächsten Termin.
 
-### Zeitformat wird nicht erkannt
+#### Zeitformat wird nicht erkannt
 Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstützt viele Formate.
 
-### Termine aus gemeinsamer DB werden nicht angezeigt
+### 🗄️ Notion-Integration
+
+#### Termine aus gemeinsamer DB werden nicht angezeigt
 - `shared_notion_api_key` und `shared_notion_database_id` prüfen
 - Berechtigung für gemeinsame Datenbank sicherstellen
 
-### Erinnerungen kommen nicht an
+#### "PartnerRelevant" Feld fehlt
+1. Notion-Datenbank öffnen
+2. Neue Property hinzufügen: Name="PartnerRelevant", Type="Checkbox"
+3. Für alle Datenbanken (private, shared, business) wiederholen
+
+### 📧 Erinnerungen & Email
+
+#### Erinnerungen kommen nicht an
 1. `reminder_enabled: true` in Konfiguration
 2. Bot-Logs auf Fehler prüfen: `tail -f bot.log`
 3. Mit `/reminder test` testen
@@ -475,16 +554,28 @@ ENVIRONMENT=production          # production/development/testing
 
 ## 📈 Geplante Features
 
+### 🤖 AI-Erweiterungen
+- [ ] Terminkonflikt-Erkennung mit AI
+- [ ] Intelligente Terminvorschläge
+- [ ] Automatische Kategorisierung von Terminen
+- [ ] Mehrsprachige AI-Unterstützung (Französisch, Spanisch)
+- [ ] Terminbeschreibung-Verbesserung durch AI
+
+### 📅 Terminverwaltung
 - [ ] Termine bearbeiten/löschen über Menü
 - [ ] Kalender-Export (ICS)
 - [ ] Wiederkehrende Termine
+- [ ] Erweiterte Terminfilter
+- [ ] Terminerinnerungen vor Ereignissen
+
+### 🔧 Technische Features
 - [ ] Web-Interface für Benutzerverwaltung
 - [ ] Mehrsprachige Oberfläche
-- [ ] Erweiterte Terminfilter
 - [ ] Encrypted Config Storage
 - [ ] Exchange/Office365 Integration
 - [ ] Kalender-Synchronisation zwischen Usern
 - [ ] Erweiterte E-Mail-Parsing-Regeln
+- [ ] AI-basierte Spam-Erkennung
 
 ## 🚀 Makefile Commands
 
@@ -516,6 +607,6 @@ MIT License - siehe [LICENSE](LICENSE) Datei
 
 ---
 
-**Enhanced by:** Multi-User Support, Visual Menu, Combined Databases, Smart Reminders, Weekday Recognition 🚀
+**Enhanced by:** Multi-User Support, Visual Menu, Combined Databases, Smart Reminders, Weekday Recognition, AI-Powered Features 🚀
 
-**Current Version:** Enhanced Single-Bot Multi-User with Intelligent Date Parsing
+**Current Version:** 2.2.0 - AI Revolution with GPT-4o-mini Integration 🤖

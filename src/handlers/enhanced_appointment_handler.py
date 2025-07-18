@@ -8,11 +8,12 @@ import pytz
 
 from src.models.appointment import Appointment
 from src.services.combined_appointment_service import CombinedAppointmentService
+from src.services.ai_assistant_service import AIAssistantService
 from config.user_config import UserConfig
 from src.utils.robust_time_parser import RobustTimeParser
 from src.utils.rate_limiter import rate_limit
 from src.utils.input_validator import InputValidator
-from pydantic.error_wrappers import ValidationError
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class EnhancedAppointmentHandler:
     def __init__(self, user_config: UserConfig):
         self.user_config = user_config
         self.combined_service = CombinedAppointmentService(user_config)
+        self.ai_service = AIAssistantService()
         
         # Handle timezone with fallback
         timezone_str = user_config.timezone if user_config.timezone else 'Europe/Berlin'
@@ -107,6 +109,8 @@ class EnhancedAppointmentHandler:
             await self.help_callback(update, context)
         elif query.data == "back_to_menu":
             await self.show_main_menu(update, context)
+        elif query.data.startswith("partner_relevant_"):
+            await self.handle_partner_relevance_callback(update, context)
     
     async def today_appointments_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle today appointments callback."""
@@ -567,3 +571,213 @@ class EnhancedAppointmentHandler:
             return (now + timedelta(days=days_ahead)).date()
         
         return None
+    
+    async def process_ai_appointment_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Process a message using AI to extract appointment information."""
+        user_id = update.effective_user.id
+        message_text = update.message.text
+        
+        # Check if AI service is available
+        if not self.ai_service.is_available():
+            logger.warning("AI service not available, falling back to manual appointment creation")
+            await update.message.reply_text(
+                "🤖 KI-Assistent ist derzeit nicht verfügbar.\n"
+                "Bitte nutze das Format: `/add <Datum> <Zeit> <Titel>`\n\n"
+                "Beispiel: `/add morgen 14:00 Zahnarzttermin`"
+            )
+            return
+        
+        # Validate input
+        try:
+            InputValidator.validate_telegram_input(
+                user_id=user_id,
+                username=update.effective_user.username,
+                message_text=message_text
+            )
+        except ValidationError as e:
+            await update.message.reply_text("❌ Ungültige Eingabe. Bitte versuche es erneut.")
+            logger.warning(f"Invalid input from user {user_id}: {e}")
+            return
+        
+        # Show processing message
+        processing_msg = await update.message.reply_text("🤖 Analysiere deinen Termin...")
+        
+        try:
+            # Extract appointment data using AI
+            appointment_data = await self.ai_service.extract_appointment_from_text(
+                message_text, 
+                self.timezone.zone
+            )
+            
+            if not appointment_data:
+                await processing_msg.edit_text(
+                    "❌ Ich konnte leider keine Termininformationen aus deiner Nachricht extrahieren.\n\n"
+                    "Bitte versuche es mit einem klareren Format:\n"
+                    "• `morgen 14:00 Zahnarzttermin`\n"
+                    "• `25.12.2024 18:00 Weihnachtsfeier`\n"
+                    "• `heute 16 Uhr Meeting mit Team`"
+                )
+                return
+            
+            # Validate extracted data
+            appointment_data = await self.ai_service.validate_appointment_data(appointment_data)
+            
+            # Format the extracted information for user confirmation
+            from datetime import datetime
+            date_obj = datetime.strptime(appointment_data['date'], '%Y-%m-%d')
+            formatted_date = date_obj.strftime('%d.%m.%Y')
+            time_str = appointment_data.get('time', 'Ganztägig')
+            
+            confirmation_text = (
+                f"🤖 Ich habe folgende Termindaten erkannt:\n\n"
+                f"📅 **Datum:** {formatted_date}\n"
+                f"⏰ **Zeit:** {time_str}\n"
+                f"📝 **Titel:** {appointment_data['title']}\n"
+            )
+            
+            if appointment_data.get('description'):
+                confirmation_text += f"📄 **Beschreibung:** {appointment_data['description']}\n"
+            
+            if appointment_data.get('location'):
+                confirmation_text += f"📍 **Ort:** {appointment_data['location']}\n"
+            
+            confirmation_text += f"\n**Ist dieser Termin auch für deine Partnerin relevant?**"
+            
+            # Create inline keyboard for partner relevance
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Ja", callback_data=f"partner_relevant_yes_{user_id}"),
+                    InlineKeyboardButton("❌ Nein", callback_data=f"partner_relevant_no_{user_id}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Store appointment data in context for callback
+            context.user_data['pending_appointment'] = appointment_data
+            
+            await processing_msg.edit_text(
+                text=confirmation_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing AI appointment: {e}", exc_info=True)
+            await processing_msg.edit_text(
+                f"❌ Es ist ein Fehler bei der Verarbeitung aufgetreten.\n"
+                f"Fehler: {str(e)[:100]}...\n\n"
+                f"Bitte versuche es später erneut oder nutze das manuelle Format."
+            )
+    
+    async def handle_partner_relevance_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle partner relevance callback from inline keyboard."""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            # Parse callback data
+            callback_parts = query.data.split('_')
+            if len(callback_parts) < 4:
+                await query.edit_message_text("❌ Ungültige Callback-Daten.")
+                return
+            
+            partner_relevant = callback_parts[2] == "yes"
+            user_id = int(callback_parts[3])
+            
+            # Verify user match
+            if user_id != update.effective_user.id:
+                await query.edit_message_text("❌ Nicht autorisiert.")
+                return
+            
+            # Get pending appointment data
+            appointment_data = context.user_data.get('pending_appointment')
+            if not appointment_data:
+                await query.edit_message_text("❌ Termindaten nicht gefunden. Bitte versuche es erneut.")
+                return
+            
+            # Create appointment with partner relevance
+            from datetime import datetime
+            import pytz
+            
+            # Parse date and time
+            date_obj = datetime.strptime(appointment_data['date'], '%Y-%m-%d')
+            
+            # Add time if provided
+            if appointment_data.get('time'):
+                time_parts = appointment_data['time'].split(':')
+                date_obj = date_obj.replace(hour=int(time_parts[0]), minute=int(time_parts[1]))
+            
+            # Localize to user's timezone
+            user_tz = pytz.timezone(self.timezone.zone)
+            date_obj = user_tz.localize(date_obj)
+            
+            appointment = Appointment(
+                title=appointment_data['title'],
+                date=date_obj,
+                description=appointment_data.get('description'),
+                location=appointment_data.get('location'),
+                partner_relevant=partner_relevant
+            )
+            
+            # Validate appointment
+            try:
+                validated_input = InputValidator.validate_appointment_input(
+                    title=appointment.title,
+                    description=appointment.description
+                )
+                appointment.title = validated_input.get('title', appointment.title)
+                appointment.description = validated_input.get('description', appointment.description)
+            except ValidationError as e:
+                await query.edit_message_text(f"❌ Ungültige Termindaten: {e.errors()[0]['msg']}")
+                return
+            
+            # Create appointment in Notion
+            try:
+                created_appointment = await self.combined_service.create_appointment(appointment)
+                logger.info(f"Successfully created appointment: {appointment.title}")
+            except Exception as e:
+                logger.error(f"Failed to create appointment in Notion: {e}")
+                await query.edit_message_text(
+                    f"❌ Fehler beim Speichern in Notion: {str(e)[:100]}...\n\n"
+                    f"Termin: {appointment.title}\n"
+                    f"Datum: {appointment.date.strftime('%d.%m.%Y um %H:%M')}\n"
+                    f"Partner-relevant: {'✅ Ja' if appointment.partner_relevant else '❌ Nein'}"
+                )
+                return
+            
+            # Success message
+            partner_status = "✅ Ja" if partner_relevant else "❌ Nein"
+            success_text = (
+                f"✅ **Termin wurde erfolgreich erstellt!**\n\n"
+                f"📅 {appointment.title}\n"
+                f"🗓️ {appointment.date.strftime('%d.%m.%Y um %H:%M')}\n"
+                f"💑 Partner-relevant: {partner_status}\n\n"
+                f"_Termin wurde in Notion gespeichert._"
+            )
+            
+            await query.edit_message_text(
+                text=success_text,
+                parse_mode='Markdown'
+            )
+            
+            # Clean up context
+            if 'pending_appointment' in context.user_data:
+                del context.user_data['pending_appointment']
+            
+        except Exception as e:
+            logger.error(f"Error handling partner relevance callback: {e}", exc_info=True)
+            await query.edit_message_text(
+                f"❌ Es ist ein Fehler aufgetreten.\n"
+                f"Fehler: {str(e)[:100]}...\n\n"
+                f"Bitte versuche es erneut oder nutze /start für das Hauptmenü."
+            )
+    
+    def create_partner_relevance_keyboard(self, user_id: int) -> InlineKeyboardMarkup:
+        """Create inline keyboard for partner relevance query."""
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Ja", callback_data=f"partner_relevant_yes_{user_id}"),
+                InlineKeyboardButton("❌ Nein", callback_data=f"partner_relevant_no_{user_id}")
+            ]
+        ]
+        return InlineKeyboardMarkup(keyboard)

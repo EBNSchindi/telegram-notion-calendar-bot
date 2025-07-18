@@ -29,8 +29,34 @@ Vollständige Referenz aller Bot-Kommandos, Features und Konfigurationsoptionen.
 
 ### Terminverwaltung
 
+#### 🤖 **AI-Enhanced Appointment Creation (Empfohlen)**
+**Beschreibung**: Intelligente Terminerfassung mit natürlicher Sprache  
+**Berechtigung**: Alle autorisierten User (erfordert OPENAI_API_KEY)  
+**Verwendung**: Einfach natürliche Nachrichten senden - der Bot erkennt Terminmuster automatisch
+
+**AI-Features**:
+- **Automatische Extraktion**: Datum, Zeit, Titel, Ort und Beschreibung
+- **Partner-Relevanz**: Interaktive Ja/Nein-Abfrage mit Inline-Buttons
+- **Titel-Optimierung**: "Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama"
+- **Fallback-Modus**: Automatischer Wechsel zu manueller Eingabe bei Problemen
+
+**AI-Beispiele**:
+```bash
+# Einfach natürlich schreiben:
+"morgen 15 Uhr Zahnarzttermin"
+"heute 16 Uhr Mama im Krankenhaus besuchen"
+"nächsten Montag 9 Uhr Meeting mit Team im Büro"
+"übermorgen 14:30 Friseurtermin bei Salon Müller"
+```
+
+**AI-Workflow**:
+1. Bot analysiert Ihre Nachricht automatisch
+2. Zeigt erkannte Termindaten zur Bestätigung
+3. Fragt: "Ist dieser Termin auch für deine Partnerin relevant?"
+4. Speichert Termin mit Partner-Relevanz in Notion
+
 #### `/add <datum> <zeit> <titel> [beschreibung]`
-**Beschreibung**: Erstellt einen neuen Termin  
+**Beschreibung**: Klassische Terminerfassung mit Kommando-Syntax  
 **Berechtigung**: Alle autorisierten User  
 **Parameter**:
 - `datum`: Datum im unterstützten Format (siehe Zeitformate)
@@ -38,7 +64,7 @@ Vollständige Referenz aller Bot-Kommandos, Features und Konfigurationsoptionen.
 - `titel`: Termintitel (erforderlich)
 - `beschreibung`: Optionale Beschreibung
 
-**Beispiele**:
+**Klassische Beispiele**:
 ```bash
 /add morgen 14:30 Meeting mit Team
 /add Sonntag 17 Uhr Familienessen
