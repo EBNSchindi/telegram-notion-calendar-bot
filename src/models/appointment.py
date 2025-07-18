@@ -21,6 +21,9 @@ class Appointment(BaseModel):
     duration_minutes: Optional[int] = Field(None, description="Event duration in minutes")
     is_business_event: bool = Field(False, description="Whether this is a business calendar event")
     
+    # Partner relevance field
+    partner_relevant: bool = Field(False, description="Whether this appointment is relevant for partner")
+    
     @field_validator('date')
     @classmethod
     def validate_date(cls, v):
@@ -125,6 +128,11 @@ class Appointment(BaseModel):
         
         # Duration and BusinessEvent fields are optional - skip if not needed
         
+        # Partner relevance field
+        properties["PartnerRelevant"] = {
+            "checkbox": self.partner_relevant
+        }
+        
         return properties
     
     @classmethod
@@ -180,6 +188,12 @@ class Appointment(BaseModel):
         duration_minutes = None
         is_business_event = False
         
+        # Extract partner relevance
+        partner_relevant = False
+        partner_prop = properties.get('PartnerRelevant', {})
+        if partner_prop.get('checkbox') is not None:
+            partner_relevant = partner_prop['checkbox']
+        
         # Extract creation date (use page creation time as fallback)
         created_at = datetime.fromisoformat(page['created_time'].replace('Z', '+00:00'))
         
@@ -194,7 +208,8 @@ class Appointment(BaseModel):
             outlook_id=outlook_id,
             organizer=organizer,
             duration_minutes=duration_minutes,
-            is_business_event=is_business_event
+            is_business_event=is_business_event,
+            partner_relevant=partner_relevant
         )
     
     def format_for_telegram(self, timezone: str = "Europe/Berlin") -> str:
@@ -213,5 +228,8 @@ class Appointment(BaseModel):
         
         if self.tags:
             formatted += f"🏷️ {', '.join(self.tags)}\n"
+        
+        if self.partner_relevant:
+            formatted += f"💑 Partner-relevant\n"
         
         return formatted
