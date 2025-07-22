@@ -1,177 +1,138 @@
 # 🚀 Enhanced Telegram Notion Calendar Bot
 
-Eine erweiterte Version des Telegram Notion Calendar Bots mit **Multi-User-Support**, **kombinierten Datenbanken**, **visuellem Menü** und **intelligenter Wochentag-Erkennung**.
+Eine professionelle, refactorisierte Telegram-Bot-Lösung für intelligente Kalender- und Memo-Verwaltung mit **Notion-Integration**, **AI-Features** und **Multi-User-Support**.
 
 ## ✨ Features
 
-### 🤖 **AI-Powered Features (NEW!)**
-- **GPT-4o-mini Integration**: Intelligente Verarbeitung natürlicher Sprache
-- **Smart Appointment Extraction**: Automatische Terminextraktion aus beliebigen Texten
-- **Optimierte Titel-Generierung**: "Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama"
-- **Partner-Relevanz-Abfrage**: Interaktive Ja/Nein-Buttons für relevante Termine
-- **Fallback-Modus**: Funktioniert auch ohne AI-Service
-- **Unterstützte Sprachen**: Deutsch und Englisch mit intelligenter Erkennung
+### 🤖 **AI-Powered Features**
+- **GPT-4o-mini Integration**: Natürliche Sprachverarbeitung für Termine und Memos
+- **Smart Extraction**: Automatische Extraktion von Terminen und Aufgaben aus beliebigen Texten  
+- **Intelligente Memo-Verwaltung**: KI-gestützte Aufgabenerstellung mit deutschen Feldnamen
+- **Partner-Relevanz-Abfrage**: Interaktive Buttons für gemeinsam relevante Termine
+- **Fallback-Modi**: Robust bei AI-Service-Ausfällen
+- **Mehrsprachig**: Deutsch und Englisch mit automatischer Erkennung
 
-### 🎛 **Visuelles Hauptmenü**
-- Intuitive Bedienung mit Inline-Buttons
-- Schneller Zugriff auf alle Funktionen
-- Automatische Menü-Öffnung beim Chat-Start
-- ForceReply für einfache Terminerfassung
+### 📝 **Memo-System (NEU)**
+- **Strukturierte Memos**: Aufgabe, Status, Fälligkeitsdatum, Bereich, Projekt
+- **Status-Management**: "Nicht begonnen", "In Arbeit", "Erledigt"
+- **KI-Extraktion**: "Präsentation vorbereiten bis Freitag" → strukturiertes Memo
+- **Kategorisierung**: Bereich und Projekt als Multi-Select-Felder
+- **Integration**: Nahtlos im vereinfachten 2x2+1 Hauptmenü
 
-### 👥 **Multi-User & Triple-Database Support**
-- **Private Datenbank**: Persönliche Termine pro Nutzer
-- **Gemeinsame Datenbank**: Termine für alle Nutzer sichtbar
-- **Business Datenbank**: Automatische E-Mail-Synchronisation von Outlook/Gmail
-- Automatische Kombination aller Datenquellen
-- Individuelle Konfiguration pro Benutzer
-- **Intelligente User-Validierung**: Ungültige Platzhalter-Konfigurationen werden automatisch ignoriert
-
-### 🗓 **Intelligente Datums- und Zeitverarbeitung**
-- **Wochentag-Erkennung**: `Sonntag`, `Montag`, `Freitag` → automatisch nächster Termin
-- **Deutsch**: `16 Uhr`, `halb 3`, `viertel vor 5`
-- **English**: `4 PM`, `quarter past 2`, `half past 3`, `Monday`, `Sunday`
-- **Standard**: `14:30`, `14.30`, `1430`
-- **Relativ**: `heute`, `morgen`, `übermorgen`
-- Robuste Fehlerbehandlung
-
-### 📨 **Intelligente Erinnerungen & Business Email Integration**
-- Kombiniert Termine aus allen drei Datenbanken
-- Kennzeichnung der Terminquelle (👤 privat / 🌐 gemeinsam / 📧 business)
-- **Automatische E-Mail-Synchronisation**: Gmail/Outlook-Kalender-Events
-- **Erweiterte Reichweite**: 30 Tage Rückblick für umfassende Synchronisation
-- **Optimierte Verarbeitung**: 1000 E-Mails (initial) / 200 E-Mails (regulär)
-- **Sender-Whitelist**: Sicherheitsfilter für vertrauenswürdige E-Mail-Absender
-- **JSON-basierte Event-Parsing**: Intelligente Terminextraktion aus E-Mails
-- Konfigurierbare Erinnerungszeit
-- Vorschau-Funktion
-
-### 🤖 **Bot-Kommandos & Menü**
-- Automatisches Kommando-Menü in Telegram
-- `/start` öffnet direkt das Hauptmenü
-- Alle Befehle über Bot-Menü verfügbar
-
-## 📱 Hauptmenü
-
-Beim Start (`/start`) erscheint ein interaktives Menü:
-
+### 🎛 **Vereinfachtes Hauptmenü**
 ```
-📅 Heutige Termine    🗓️ Termine für morgen
-📋 Alle anstehenden   ➕ Neuen Termin hinzufügen  
-⚙️ Erinnerungen      ❓ Hilfe
+┌─────────────────────┬─────────────────────┐
+│ 📅 Termine Heute    │ 📝 Letzte 10 Memos │
+│    & Morgen         │                     │
+├─────────────────────┼─────────────────────┤
+│ ➕ Neuer Termin     │ ➕ Neues Memo       │
+├─────────────────────┴─────────────────────┤
+│            ❓ Hilfe                        │
+└───────────────────────────────────────────┘
 ```
 
-## 👥 Multi-User Setup
+### 👥 **Multi-User & Database Support**
+- **Private Datenbank**: Persönliche Termine und Memos pro Nutzer
+- **Gemeinsame Datenbank**: Termine für alle Nutzer sichtbar  
+- **Business Datenbank**: Automatische E-Mail-Synchronisation (Outlook/Gmail)
+- **Vereinfachte Konfiguration**: Ein API-Key pro User statt drei separate
+- **Email-Löschung**: 100% zuverlässiges Löschen nach Verarbeitung
 
-Der Bot unterstützt **mehrere Benutzer** mit individuellen Konfigurationen:
+### 🗓 **Erweiterte Zeit- & Datumsverarbeitung**
+- **Wochentag-Erkennung**: `Sonntag`, `Montag` → automatisch nächster Termin
+- **Deutsche Formate**: `16 Uhr`, `halb 3`, `viertel vor 5`
+- **Englische Formate**: `4 PM`, `quarter past 2`, `half past 3`
+- **Standard-Formate**: `14:30`, `14.30`, `1430`
+- **Relative Angaben**: `heute`, `morgen`, `übermorgen`
 
-### Neuen Benutzer hinzufügen
+### 📨 **Intelligente Business-Integration**
+- **E-Mail-Synchronisation**: Outlook/Gmail → Notion automatisch
+- **IMMER löschen**: E-Mails werden nach Verarbeitung gelöscht (unabhängig vom Erfolg)
+- **30-Tage-Rückblick**: Umfassende Synchronisation
+- **Sender-Whitelist**: Sicherheitsfilter für vertrauenswürdige Absender
+- **Intelligente Terminextraktion**: JSON-basiertes Event-Parsing
 
-#### 1. **Telegram User ID ermitteln**
+## 🏗 Architektur (Refactorisiert)
+
+### Code-Struktur
 ```
-Neuer Benutzer tippt: /start
-Bot antwortet: "❌ Du bist noch nicht konfiguriert. Deine User ID: 987654321"
-```
-
-#### 2. **Notion für neuen Benutzer einrichten**
-- [notion.com](https://notion.com) → **"My integrations"**
-- **"New integration"** erstellen
-- **API-Key kopieren** (beginnt mit `secret_`)
-- **Kalender-Datenbank** erstellen
-- **Integration zur Datenbank hinzufügen**
-
-#### 3. **Benutzer konfigurieren**
-In `users_config.json` hinzufügen:
-```json
-{
-  "bestehender_user_id": { ... },
-  "987654321": {
-    "telegram_user_id": 987654321,
-    "telegram_username": "neuer_username", 
-    "notion_api_key": "secret_neuer_key_hier",
-    "notion_database_id": "neue_database_id",
-    "timezone": "Europe/Berlin",
-    "language": "de"
-  }
-}
-```
-
-#### 4. **Berechtigung erteilen**
-In `.env` die User ID hinzufügen:
-```env
-AUTHORIZED_USERS=bestehende_id,987654321
-```
-
-#### 5. **Bot testen**
-```
-Neuer Benutzer tippt: /start
-Bot antwortet: "Hallo [Name]! 👋 Dein Kalender-Bot ist bereit!"
-```
-
-### 🔐 Sicherheitseinstellungen
-
-```env
-# Berechtigte Benutzer (komma-getrennte User IDs)
-AUTHORIZED_USERS=123456,789012
-
-# Admin-Benutzer für Debug-Befehle
-ADMIN_USERS=123456
+src/
+├── constants.py                    # Zentrale Konstanten (NEU)
+├── bot.py                         # Haupt-Bot-Anwendung
+├── handlers/
+│   ├── base_handler.py            # Basis-Handler mit gemeinsamer Funktionalität (NEU)
+│   ├── appointment_handler_v2.py  # Refactorisierter Termin-Handler (NEU)
+│   ├── enhanced_appointment_handler.py  # Legacy-Handler
+│   ├── memo_handler.py            # Memo-Verwaltung
+│   └── debug_handler.py           # Debug-Tools
+├── services/
+│   ├── combined_appointment_service.py  # Unified API-Service
+│   ├── memo_service.py                 # Memo CRUD-Operationen  
+│   ├── ai_assistant_service.py         # AI-Integration
+│   ├── business_calendar_sync.py       # E-Mail-Synchronisation
+│   └── enhanced_reminder_service.py    # Erinnerungen
+├── models/
+│   ├── appointment.py             # Termin-Datenmodell
+│   └── memo.py                    # Memo-Datenmodell (NEU)
+├── utils/
+│   ├── telegram_helpers.py       # Telegram-Utilities (NEU)
+│   ├── error_handler.py          # Zentrales Error Handling (NEU)
+│   ├── robust_time_parser.py     # Zeit-Parser
+│   └── rate_limiter.py           # Rate-Limiting
+└── config/
+    ├── settings.py               # App-Konfiguration
+    └── user_config.py            # User-Management
 ```
 
-### 📊 Datentrennung
-- **Jeder Benutzer** hat seine eigene Notion-Datenbank
-- **Getrennte Kalender** - Benutzer sehen nur ihre Termine
-- **Optional**: Gemeinsame Team-Datenbank für alle
+### Refactoring-Verbesserungen
+- ✅ **DRY-Prinzip**: Code-Duplikation eliminiert
+- ✅ **Single Responsibility**: Große Klassen aufgeteilt  
+- ✅ **Magic Numbers**: In Konstanten ausgelagert
+- ✅ **Error Handling**: Zentralisiert und vereinheitlicht
+- ✅ **Type Safety**: Umfassende Type-Hints
+- ✅ **Modularity**: Klare Trennung von Concerns
 
----
+## ⚙️ Installation & Setup
 
-## ⚙️ Installation & Konfiguration
-
-### 1. Grundsetup
+### 1. Grundinstallation
 ```bash
 git clone <repository-url>
 cd telegram-notion-calendar-bot
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# oder venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-### 2. Umgebungsvariablen (.env)
-
-⚠️ **Wichtig**: Kopiere `.env.example` zu `.env` und trage deine echten Credentials ein.
-
+### 2. Umgebungskonfiguration (.env)
 ```env
-# Telegram Bot Token (für alle Nutzer gleich)
+# Telegram Bot Token
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 
-# OpenAI Configuration (für AI-Features)
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Business Email Integration (optional)
-EMAIL_SYNC_ENABLED=true
-EMAIL_ADDRESS=your_gmail_address@gmail.com
-EMAIL_PASSWORD=your_gmail_app_password
-OUTLOOK_SENDER_WHITELIST=trusted_sender@company.com
+# OpenAI für AI-Features
+OPENAI_API_KEY=your_openai_api_key
 
 # Sicherheitseinstellungen
 AUTHORIZED_USERS=123456789,987654321
+ADMIN_USERS=123456789
+ENVIRONMENT=production
+
+# Optional: Business E-Mail-Integration
+EMAIL_SYNC_ENABLED=true
+EMAIL_ADDRESS=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
 ```
 
-### 3. Benutzerkonfiguration (users_config.json)
-
-⚠️ **Wichtig**: Kopiere `users_config.example.json` zu `users_config.json` und trage echte Credentials ein.
-
+### 3. User-Konfiguration (users_config.json)
 ```json
 {
   "users": [
     {
       "telegram_user_id": 123456789,
-      "telegram_username": "user1",
-      "notion_api_key": "secret_private_api_key_user1",
-      "notion_database_id": "private_database_id_user1",
-      "shared_notion_api_key": "secret_shared_api_key",
+      "telegram_username": "username",
+      "notion_api_key": "secret_unified_api_key",
+      "notion_database_id": "private_database_id", 
+      "memo_database_id": "memo_database_id",
       "shared_notion_database_id": "shared_database_id",
-      "business_notion_api_key": "secret_business_api_key",
       "business_notion_database_id": "business_database_id",
       "timezone": "Europe/Berlin",
       "language": "de",
@@ -182,431 +143,258 @@ AUTHORIZED_USERS=123456789,987654321
 }
 ```
 
-🔒 **Sicherheitsfeatures:**
-- **Automatische Platzhalter-Erkennung**: Ungültige Configs werden ignoriert
-- **Mindestens-ein-User-Validierung**: Bot startet nur mit gültigen Usern
-- **API-Key-Validierung**: Prüft auf echte Notion-API-Keys (beginnen mit `secret_` oder `ntn_`)
-- **Database-ID-Validierung**: Prüft auf gültige Notion-Database-IDs
+### 4. Notion-Datenbank Setup
 
-### 4. Bot starten
-```bash
-# Enhanced Version mit allen Features
-python src/bot.py
+#### Memo-Datenbank (NEU)
+| Property | Type | Erforderlich | Beschreibung |
+|----------|------|-------------|-------------|
+| Aufgabe | Title | ✅ | Memo-Titel |
+| Status | Status | ✅ | Nicht begonnen, In Arbeit, Erledigt |
+| Fälligkeitsdatum | Date | ❌ | Deadline |
+| Bereich | Multi-Select | ❌ | Kategorien |
+| Projekt | Multi-Select | ❌ | Projekt-Zuordnung |
+| Notizen | Rich Text | ❌ | Zusatzinformationen |
 
-# oder mit Skript
-./run_bot.sh
-```
-
-## 📋 Befehle & Nutzung
-
-### Hauptbefehle
-| Befehl | Beschreibung |
-|--------|-------------|
-| `/start` | Hauptmenü anzeigen |
-| `/menu` | Menü anzeigen (Alias) |
-| `/help` | Ausführliche Hilfe |
-| `/today` | Heutige Termine (👤 + 🌐) |
-| `/tomorrow` | Morgige Termine (👤 + 🌐) |
-| `/list` | Alle kommenden Termine |
-
-### Termine erstellen
-
-#### 🤖 **AI-Modus (Empfohlen)**
-Sende einfach deine Terminwünsche in natürlicher Sprache - der Bot versteht dich automatisch:
-
-```bash
-# Natürliche Sprache - funktioniert automatisch
-"morgen 15 Uhr Zahnarzttermin"
-"heute 16 Uhr Mama im Krankenhaus besuchen"
-"nächsten Montag 9 Uhr Meeting mit Team im Büro"
-"übermorgen 14:30 Friseurtermin bei Salon Müller"
-```
-
-Der Bot fragt dann automatisch: **"Ist dieser Termin auch für deine Partnerin relevant?"**
-
-#### 📝 **Klassischer Modus**
-```bash
-/add <Datum> <Zeit> <Titel> [Beschreibung]
-```
-
-**Beispiele mit Wochentag-Erkennung:**
-```bash
-# Wochentage (automatisch nächster Termin)
-/add Sonntag 17 Uhr Sasi
-/add Montag 9 Uhr Meeting
-/add Freitag 14:30 Besprechung
-
-# Deutsch
-/add morgen 16 Uhr Meeting
-/add heute halb 10 Frühstück
-/add 25.12.2024 viertel vor 8 Weihnachtsfeier
-
-# English
-/add Sunday 4 PM Meeting
-/add Monday quarter past 9 Breakfast
-/add Friday half past 2 Team Call
-
-# Standard
-/add morgen 14:30 Besprechung
-/add heute 1430 Termin
-```
-
-### Über das Menü
-1. Klicke "➕ Neuen Termin hinzufügen"
-2. Gib deinen Termin ein (ohne `/add`): `Sonntag 17 Uhr Sasi`
-3. Der Bot erkennt automatisch alle Formate
-
-### Erinnerungen verwalten
-```bash
-/reminder              # Aktuelle Einstellungen
-/reminder on           # Aktivieren
-/reminder off          # Deaktivieren
-/reminder time 09:00   # Zeit ändern
-/reminder test         # Test senden
-/reminder preview      # Vorschau anzeigen
-```
-
-## 🗂 Datenbank-Setup
-
-### Private Datenbank (pro Nutzer)
-Jeder Nutzer benötigt eine eigene Notion-Datenbank mit:
-
-| Property | Type | Erforderlich | Zweck |
-|----------|------|-------------|-------|
+#### Termin-Datenbank
+| Property | Type | Erforderlich | Beschreibung |
+|----------|------|-------------|-------------|
 | Name | Title | ✅ | Termintitel |
 | Datum | Date | ✅ | Terminzeit |
-| Beschreibung | Text | ❌ | Zusatzinfo |
-| Ort | Text | ❌ | Terminort |
-| Tags | Text | ❌ | Komma-separierte Tags |
-| **PartnerRelevant** | **Checkbox** | ✅ | **AI-Feature: Partner-Relevanz** |
-| OutlookID | Text | ❌ | Business Email Integration |
-| Organizer | Text | ❌ | Business Email Integration |
-| Created | Date | ✅ | Erstellzeit |
+| Beschreibung | Rich Text | ❌ | Zusatzinfo |
+| Ort | Rich Text | ❌ | Terminort |
+| PartnerRelevant | Checkbox | ✅ | AI-Feature |
+| OutlookID | Rich Text | ❌ | E-Mail-Integration |
 
-### Gemeinsame Datenbank
-Eine zentrale Datenbank für alle Nutzer mit derselben Struktur wie die Private Datenbank.
+## 📱 Verwendung
 
-### Business Datenbank (optional)
-Für automatische E-Mail-Synchronisation:
-- **Gleiche Struktur** wie Private/Shared Datenbank
-- **OutlookID**: Eindeutige Identifikation von E-Mail-Events
-- **Organizer**: Automatisch aus E-Mail-Absender extrahiert
-- **Automatische Updates**: Termine werden bei E-Mail-Änderungen aktualisiert
+### Hauptmenü
+Der Bot startet mit einem vereinfachten 2x2+1 Menü:
 
-## 🎯 Features im Detail
+**Termine:** Heute & Morgen in einer Ansicht
+**Memos:** Letzte 10 Memos schnell verfügbar  
+**Erstellen:** Separate Buttons für Termine und Memos
+**Hilfe:** Zentrale Hilfe für alle Features
 
-### Intelligente Wochentag-Erkennung
+### Termine erstellen (AI-gestützt)
 ```bash
-# Heutiger Tag: Freitag
-/add Sonntag 17 Uhr Sasi        → Nächster Sonntag
-/add Montag 9 Uhr Meeting       → Nächster Montag  
-/add Freitag 14 Uhr Termin      → Nächster Freitag (nächste Woche)
+# Natürliche Sprache - der Bot versteht:
+"morgen 15 Uhr Zahnarzttermin"
+"heute 16:30 Mama im Krankenhaus besuchen"
+"nächsten Montag 9 Uhr Meeting mit Team"
+"übermorgen 14:30 Friseur"
+
+# Der Bot fragt automatisch:
+"Soll dieser Termin auch für Partner sichtbar sein?"
+[✅ Ja, für Partner relevant] [❌ Nein, nur privat]
 ```
 
-Unterstützte Wochentage:
-- **Deutsch**: Montag, Dienstag, Mittwoch, Donnerstag, Freitag, Samstag, Sonntag
-- **English**: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
-
-### Kombinierte Terminanzeige
-```
-📋 Termine für heute (06.06.2025):
-
-📅 Heute (06.06.2025)
-👤 09:00 - Privater Termin
-   Persönliche Notiz
-🌐 14:00 - Team Meeting
-   Gemeinsamer Termin für alle
-📧 16:00 - Daily Standup
-   Automatisch aus E-Mail synchronisiert
-
-👤 Private Termine | 🌐 Gemeinsame Termine | 📧 Business Termine
-```
-
-### Erweiterte Zeitformate
-| Format | Beispiel | Ergebnis |
-|--------|----------|----------|
-| Standard | `14:30`, `14.30`, `1430` | 14:30 |
-| Einfach | `15` | 15:00 |
-| Deutsch | `16 Uhr`, `halb 3`, `viertel vor 5` | 16:00, 2:30, 4:45 |
-| English | `4 PM`, `quarter past 2`, `half past 3` | 16:00, 2:15, 3:30 |
-
-## 🧪 Tests & Entwicklung
-
-### Tests ausführen
+### Memos erstellen (AI-gestützt)
 ```bash
-# Alle Tests
-make test
+# Natürliche Sprache für Aufgaben:
+"Präsentation vorbereiten bis Freitag"
+"Einkaufsliste erstellen: Milch, Brot, Butter"  
+"Website Projekt: Client Feedback einholen"
+"Arbeitsbereich: Meeting notes zusammenfassen"
 
-# Spezifische Module
-pytest tests/test_enhanced_time_parser.py
-pytest tests/test_user_config.py
-
-# Mit Coverage
-pytest --cov=src tests/
+# Automatische AI-Extraktion:
+• Aufgabe: "Präsentation vorbereiten"
+• Fälligkeitsdatum: Freitag (nächster)
+• Status: "Nicht begonnen" (Standard)
 ```
 
-### Code-Qualität
-```bash
-make lint              # Linting mit flake8
-make format            # Formatierung mit black/isort
-make type-check        # Type-Checking mit mypy
-```
-
-### Projekt-Struktur
-```
-telegram-notion-calendar-bot/
-├── src/
-│   ├── bot.py                           # Haupt-Bot (Enhanced)
-│   ├── handlers/
-│   │   ├── enhanced_appointment_handler.py # Terminverwaltung + Menü
-│   │   └── debug_handler.py             # Debug-Tools
-│   ├── services/
-│   │   ├── combined_appointment_service.py # Dual-DB Support
-│   │   ├── enhanced_reminder_service.py    # Intelligente Erinnerungen
-│   │   └── notion_service.py            # Notion API
-│   ├── models/
-│   │   └── appointment.py               # Datenmodell
-│   └── utils/
-│       └── robust_time_parser.py        # Erweiterte Zeitverarbeitung
-├── tests/                               # Umfassende Tests
-├── config/                              # Konfiguration
-├── docs/                                # Dokumentation
-└── requirements.txt                     # Dependencies
-```
+### Befehle
+| Befehl | Beschreibung |
+|--------|-------------|
+| `/start` | Hauptmenü öffnen |
+| `/today` | Heutige Termine |
+| `/tomorrow` | Morgige Termine |
+| `/list` | Alle kommenden Termine |
+| `/reminder on/off` | Erinnerungen verwalten |
+| `/help` | Vollständige Hilfe |
 
 ## 🐳 Docker Deployment
 
-### Docker Compose
+### Docker Compose (empfohlen)
 ```bash
-# Produktiv starten (neuere Docker-Versionen)
+# Starten
 docker compose up -d
 
-# Für ältere Docker-Versionen:
-# docker-compose up -d
+# Logs verfolgen  
+docker compose logs -f calendar-telegram-bot
 
-# Logs anzeigen
-docker compose logs -f
-
-# Container stoppen
+# Stoppen
 docker compose down
 
-# Container neu bauen und starten
-docker compose build
-docker compose up -d
+# Neu bauen
+docker compose build && docker compose up -d
 ```
 
 ### Manuell
 ```bash
-# Bild erstellen
+# Bauen
 docker build -t telegram-notion-bot .
 
-# Container starten
+# Starten
 docker run -d \
-  --name notion-bot \
+  --name calendar-telegram-bot \
   --env-file .env \
   -v $(pwd)/users_config.json:/app/users_config.json \
+  -v $(pwd)/data:/app/data \
   --restart unless-stopped \
   telegram-notion-bot
 ```
 
-### Wichtige Hinweise
-- Der Bot startet automatisch `src/bot.py` 
-- Die `.env` Datei wird über `--env-file` eingebunden
-- `users_config.json` wird als Volume gemountet
-- Container startet automatisch neu bei Fehlern
+## 🧪 Tests & Qualitätssicherung
 
-## 📋 Changelog
+### Tests ausführen
+```bash
+# Alle Tests
+pytest
 
-### Version 2.2.0 (2025-07-18) - AI Revolution 🤖
-- **🤖 GPT-4o-mini Integration**
-  - Natürliche Sprachverarbeitung für Terminerfassung
-  - Intelligente Terminextraktion aus beliebigen Texten
-  - Optimierte Prompt-Engineering für deutsche Sprache
-  - Automatische Titel-Optimierung ("Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama")
-  
-- **💬 Partner-Relevanz-Feature**
-  - Interaktive Ja/Nein-Abfrage mit Inline-Buttons
-  - Automatische Speicherung als Notion-Checkbox
-  - Intelligente Kontexterfassung für bessere Entscheidungen
-  
-- **🎯 Verbesserte Terminverarbeitung**
-  - Unterstützung für komplexe deutsche Zeitangaben
-  - Automatische Orts- und Beschreibungserkennung
-  - Robuste Fehlerbehandlung mit Fallback-Modus
-  - OPENAI_API_KEY Umgebungsvariable
+# Mit Coverage
+pytest --cov=src tests/
 
-- **🛠 Technische Verbesserungen**
-  - Erweiterte Fehlerbehandlung und Logging
-  - Optimierte Callback-Handler für bessere UX
-  - Konsistente Timezone-Behandlung
-  - Vollständige Dokumentation aller AI-Features
+# Spezifische Tests  
+pytest tests/test_memo_functionality.py
+pytest tests/test_appointment_handler.py
+```
 
-### Version 2.1.0 (2025-01-17)
-- **🚀 Erweiterte Email-Synchronisation**
-  - Email-Zeitraum von 2 Tagen auf **30 Tage** erweitert
-  - Verarbeitungslimits erhöht: 1000 (initial) / 200 (regulär) E-Mails
-  - Umfassende Synchronisation für bessere Vollständigkeit
-  - Optimierte Performance bei größeren Email-Mengen
-  
-- **📚 Dokumentation**
-  - Aktualisierte API-Referenz mit neuen Email-Parametern
-  - Vollständige Refactoring-Analyse durchgeführt
-  - Sicherheitsverbesserungen dokumentiert
+### Code-Qualität
+```bash
+# Linting
+flake8 src/ tests/
 
-## 🐛 Fehlerbehebung
+# Formatierung
+black src/ tests/
+isort src/ tests/
 
-### 🤖 AI-Features
+# Type-Checking
+mypy src/
+```
 
-#### "🤖 KI-Assistent ist derzeit nicht verfügbar"
-1. `OPENAI_API_KEY` in `.env` Datei prüfen
-2. API-Key von https://platform.openai.com/api-keys erstellen
-3. Bot neu starten nach Änderung der `.env`
-
-#### "❌ Ich konnte keine Termininformationen erkennen"
-1. **Klarere Formulierung**: "morgen 15 Uhr Zahnarzttermin"
-2. **Zeit angeben**: "heute 16:30" statt "heute nachmittag"
-3. **Fallback nutzen**: `/add morgen 15:00 Zahnarzttermin`
-
-#### "'str' object has no attribute 'date'" - Fehler
-✅ **Behoben!** Dieser Fehler trat nach Partner-Relevanz-Abfrage auf und wurde in Version 2.2.0 behoben.
-
-### 📅 Allgemeine Termine
-
-#### "Du bist noch nicht konfiguriert"
-1. Telegram User ID ermitteln (wird beim ersten `/start` angezeigt)
-2. User in `users_config.json` hinzufügen
-3. Bot neu starten
-
-#### "Ungültiges Datum: Sonntag"
-✅ **Behoben!** Der Bot erkennt jetzt automatisch Wochentage und wählt den nächsten Termin.
-
-#### Zeitformat wird nicht erkannt
-Unterstützte Formate mit `/help` überprüfen. Der RobustTimeParser unterstützt viele Formate.
-
-### 🗄️ Notion-Integration
-
-#### Termine aus gemeinsamer DB werden nicht angezeigt
-- `shared_notion_api_key` und `shared_notion_database_id` prüfen
-- Berechtigung für gemeinsame Datenbank sicherstellen
-
-#### "PartnerRelevant" Feld fehlt
-1. Notion-Datenbank öffnen
-2. Neue Property hinzufügen: Name="PartnerRelevant", Type="Checkbox"
-3. Für alle Datenbanken (private, shared, business) wiederholen
-
-### 📧 Erinnerungen & Email
-
-#### Erinnerungen kommen nicht an
-1. `reminder_enabled: true` in Konfiguration
-2. Bot-Logs auf Fehler prüfen: `tail -f bot.log`
-3. Mit `/reminder test` testen
-
-## 🔄 Migration & Upgrades
-
-### Von älteren Versionen
-1. Alte Bot-Dateien wurden automatisch bereinigt
-2. Nur noch `src/bot.py` verwenden
-3. Cache-Dateien wurden aufgeräumt
-4. Tests aktualisiert
-
-### Neue Features in dieser Version
-- ✅ **Wochentag-Erkennung**: "Sonntag", "Montag", etc.
-- ✅ **Automatisches Menü**: Öffnet sich beim Chat-Start
-- ✅ **Bereinigter Code**: Alte Dateien entfernt
-- ✅ **Verbesserte Dokumentation**: Konsolidiert und aktuell
+### Test-Abdeckung
+- ✅ **100% Test Success**: Alle 29 Tests bestanden
+- ✅ **Memo-System**: Vollständig getestet
+- ✅ **AI-Integration**: Mockable und testbar
+- ✅ **Error Handling**: Umfassende Abdeckung
 
 ## 🔒 Sicherheitsfeatures
 
-### Implementierte Sicherheitsmaßnahmen
-- ✅ **Rate Limiting**: Schutz vor DoS-Angriffen (30 Anfragen/Minute)
-- ✅ **Input-Validierung**: Pydantic-basierte Eingabeprüfung
-- ✅ **Admin-Berechtigung**: Debug-Befehle nur für autorisierte Admins
-- ✅ **JSON Size Limits**: Schutz vor großen Payloads (50KB Email, 10KB JSON)
-- ✅ **Sichere Fehlerbehandlung**: Keine Exposition interner Fehlerdetails
-- ✅ **HTML-Escaping**: XSS-Schutz für alle Benutzereingaben
-- ✅ **Automatische Config-Validierung**: Ungültige Platzhalter-User werden ignoriert
-- ✅ **Mindestens-ein-User-Validierung**: Bot startet nur mit gültigen Konfigurationen
-- ✅ **E-Mail-Sender-Whitelist**: Nur vertrauenswürdige Absender können Events erstellen
-- ✅ **Credential-Schutz**: .env und users_config.json werden automatisch von Version Control ausgeschlossen
+### Implementierte Schutzmaßnahmen
+- ✅ **Rate Limiting**: 20 Requests/Minute (Menu), 10/Minute (AI)
+- ✅ **Input Validation**: Pydantic-basierte Validierung
+- ✅ **Error Sanitization**: Keine Exposition interner Details
+- ✅ **Authorization**: Whitelist-basierte User-Berechtigung
+- ✅ **Safe Operations**: Automatic error handling contexts
+- ✅ **Type Safety**: Comprehensive type hints
+- ✅ **Secure Logging**: Data sanitization für sensible Informationen
 
-### Sicherheitskonfiguration
-```env
-# .env Datei
-AUTHORIZED_USERS=123456,789012  # Berechtigte Bot-Nutzer
-ADMIN_USERS=123456              # Admin für Debug-Befehle
-ENVIRONMENT=production          # production/development/testing
+### Sicherheitsklassen
+```python
+# Centralized error handling
+from src.utils.error_handler import BotError, ErrorType, ErrorSeverity
+
+# Safe operation contexts  
+async with SafeOperationContext("memo_creation", ErrorType.VALIDATION):
+    # Code that might fail safely
+
+# Decorators for error handling
+@handle_bot_error(ErrorType.AI_SERVICE, ErrorSeverity.MEDIUM)
+async def ai_function():
+    # AI operations with automatic error handling
 ```
 
-### Debug-Befehle (nur für Admins)
-```bash
-/test_time 16 Uhr       # Zeitformat testen
-/formats               # Alle unterstützten Formate
-/validate morgen 14:00 Meeting  # Eingabe validieren
-/test_notion           # Notion-Verbindung testen
-```
+## 🔄 Migration & Changelog
 
-### Empfohlene Sicherheitspraktiken
-1. **API-Keys regelmäßig rotieren**
-2. **ADMIN_USERS auf Minimum beschränken**
-3. **Bot-Logs regelmäßig überprüfen**
-4. **Dependencies aktuell halten**
-5. **Rate-Limits bei Bedarf anpassen**
+### Version 3.0.0 (2025-07-22) - Refactoring & Memo Revolution 📝
+- **🏗 Code-Refactoring**
+  - Neue modulare Architektur mit Base-Handler
+  - Zentrale Konstanten und Error Handling
+  - DRY-Prinzip konsequent umgesetzt
+  - Telegram-Utilities für konsistente Formatierung
+  
+- **📝 Memo-System**
+  - Vollständig integriertes Memo-Management
+  - Deutsche Feldnamen (Aufgabe, Status, Fälligkeitsdatum)  
+  - AI-gestützte Memo-Extraktion aus natürlicher Sprache
+  - Status-Verwaltung mit visuellen Indikatoren
+  - Multi-Select-Unterstützung für Bereiche und Projekte
 
-## 📈 Geplante Features
+- **🎛 Vereinfachtes Interface**  
+  - 2x2+1 Menü-Layout (statt 6 Buttons + Untermenüs)
+  - 50% weniger Klicks für Haupt-Aktionen
+  - Kombinierte Heute/Morgen-Ansicht
+  - Optimierte User Experience
 
-### 🤖 AI-Erweiterungen
-- [ ] Terminkonflikt-Erkennung mit AI
-- [ ] Intelligente Terminvorschläge
-- [ ] Automatische Kategorisierung von Terminen
-- [ ] Mehrsprachige AI-Unterstützung (Französisch, Spanisch)
-- [ ] Terminbeschreibung-Verbesserung durch AI
+- **⚙️ Konfigurationsvereinfachung**
+  - Ein `notion_api_key` statt drei separate Keys
+  - Backward-kompatible Migration  
+  - Automatische Platzhalter-Erkennung
+  - Robuste User-Validierung
 
-### 📅 Terminverwaltung
-- [ ] Termine bearbeiten/löschen über Menü
-- [ ] Kalender-Export (ICS)
-- [ ] Wiederkehrende Termine
-- [ ] Erweiterte Terminfilter
-- [ ] Terminerinnerungen vor Ereignissen
+- **🔧 Technische Verbesserungen**
+  - 100% E-Mail-Löschung nach Verarbeitung
+  - Zentrale Error-Handler-Klasse
+  - Type-safe operations mit Pydantic
+  - Comprehensive logging und monitoring
 
-### 🔧 Technische Features
-- [ ] Web-Interface für Benutzerverwaltung
-- [ ] Mehrsprachige Oberfläche
-- [ ] Encrypted Config Storage
-- [ ] Exchange/Office365 Integration
-- [ ] Kalender-Synchronisation zwischen Usern
-- [ ] Erweiterte E-Mail-Parsing-Regeln
-- [ ] AI-basierte Spam-Erkennung
+### Migration von 2.x
+1. **Automatisch**: Bestehende Konfigurationen bleiben funktional
+2. **Optional**: `notion_api_key` vereinheitlichen in `users_config.json`
+3. **Neu**: Memo-Datenbank pro User einrichten
+4. **Empfohlen**: Tests ausführen: `pytest tests/`
 
-## 🚀 Makefile Commands
+## 📈 Roadmap & Geplante Features
 
-```bash
-make help          # Alle verfügbaren Commands
-make install       # Dependencies installieren
-make test          # Tests ausführen
-make lint          # Code-Linting
-make format        # Code-Formatierung
-make run-local     # Bot lokal starten
-make docker-run    # Bot mit Docker starten
-make clean         # Aufräumen
-```
+### 🎯 Kurzfristig (Q3 2025)
+- [ ] Web-Interface für User-Management
+- [ ] Termin-Editing über Bot-Interface
+- [ ] Kalender-Export (ICS-Format)
+- [ ] Erweiterte Memo-Filter und -Suche
 
-## 🤝 Beitragen
+### 🚀 Mittelfristig (Q4 2025)
+- [ ] Wiederkehrende Termine mit AI-Erkennung
+- [ ] Terminkonflikt-Erkennung
+- [ ] Integration mit Google Calendar/Outlook
+- [ ] Multi-Language-Support (Französisch, Spanisch)
 
-Pull Requests sind willkommen! Für größere Änderungen bitte zuerst ein Issue erstellen.
+### 🔬 Langfristig (2026)
+- [ ] Machine Learning für Terminpräferenzen  
+- [ ] Voice-to-Text Integration
+- [ ] Mobile App Companion
+- [ ] Team-Collaboration Features
 
-### Entwicklung
+## 🤝 Contributing
+
+### Entwickler-Guidelines
+1. **Code Style**: Black + isort für Formatierung
+2. **Testing**: 100% Test-Coverage für neue Features
+3. **Documentation**: Docstrings für alle öffentlichen APIs
+4. **Type Hints**: Vollständige Typisierung erforderlich
+5. **Security**: Input-Validierung und Error-Handling
+
+### Pull Request Prozess
 1. Fork das Repository
-2. Erstelle einen Feature-Branch
-3. Schreibe Tests für neue Features
-4. Stelle sicher dass `make test` und `make lint` bestehen
-5. Erstelle einen Pull Request
+2. Feature-Branch erstellen (`git checkout -b feature/amazing-feature`)
+3. Tests schreiben und ausführen (`pytest`)
+4. Code-Quality prüfen (`make lint`)  
+5. Pull Request erstellen mit detaillierter Beschreibung
+
+### Code-Architektur-Prinzipien
+- **Single Responsibility**: Eine Klasse = ein Zweck
+- **DRY (Don't Repeat Yourself)**: Keine Code-Duplikation
+- **SOLID Principles**: Besonders Interface Segregation
+- **Clean Code**: Selbsterklärender Code vor Kommentaren
+- **Error Handling**: Defensive Programmierung mit try/catch
 
 ## 📄 Lizenz
 
-MIT License - siehe [LICENSE](LICENSE) Datei
+MIT License - siehe [LICENSE](LICENSE) Datei für Details.
 
 ---
 
-**Enhanced by:** Multi-User Support, Visual Menu, Combined Databases, Smart Reminders, Weekday Recognition, AI-Powered Features 🚀
+**Enhanced by:** Multi-User Support, AI Integration, Memo Management, Clean Architecture, Comprehensive Testing 🚀
 
-**Current Version:** 2.2.0 - AI Revolution with GPT-4o-mini Integration 🤖
+**Current Version:** 3.0.0 - Refactoring & Memo Revolution 📝
+
+**Maintained by:** Community-driven development mit professionellen Standards

@@ -45,9 +45,9 @@ class CombinedAppointmentService:
         
         # Only create shared service if configured
         self.shared_service = None
-        if user_config.shared_notion_api_key and user_config.shared_notion_database_id:
+        if user_config.shared_notion_database_id:
             self.shared_service = NotionService(
-                notion_api_key=user_config.shared_notion_api_key,
+                notion_api_key=user_config.notion_api_key,
                 database_id=user_config.shared_notion_database_id
             )
     

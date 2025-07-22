@@ -9,6 +9,7 @@ import pytz
 from src.models.appointment import Appointment
 from src.services.combined_appointment_service import CombinedAppointmentService
 from src.services.ai_assistant_service import AIAssistantService
+from src.handlers.memo_handler import MemoHandler
 from config.user_config import UserConfig
 from src.utils.robust_time_parser import RobustTimeParser
 from src.utils.rate_limiter import rate_limit
@@ -25,6 +26,7 @@ class EnhancedAppointmentHandler:
         self.user_config = user_config
         self.combined_service = CombinedAppointmentService(user_config)
         self.ai_service = AIAssistantService()
+        self.memo_handler = MemoHandler(user_config)
         
         # Handle timezone with fallback
         timezone_str = user_config.timezone if user_config.timezone else 'Europe/Berlin'
@@ -58,18 +60,17 @@ class EnhancedAppointmentHandler:
             f"*Wähle eine Aktion:*"
         )
         
-        # Create inline keyboard
+        # Create simplified inline keyboard (2x2 + 1)
         keyboard = [
             [
-                InlineKeyboardButton("📅 Heutige Termine", callback_data="today"),
-                InlineKeyboardButton("🗓️ Termine für morgen", callback_data="tomorrow")
+                InlineKeyboardButton("📅 Termine Heute & Morgen", callback_data="today_tomorrow"),
+                InlineKeyboardButton("📝 Letzte 10 Memos", callback_data="recent_memos")
             ],
             [
-                InlineKeyboardButton("📋 Alle anstehenden Termine", callback_data="list"),
-                InlineKeyboardButton("➕ Neuen Termin hinzufügen", callback_data="add")
+                InlineKeyboardButton("➕ Neuer Termin", callback_data="add_appointment"),
+                InlineKeyboardButton("➕ Neues Memo", callback_data="add_memo")
             ],
             [
-                InlineKeyboardButton("⚙️ Erinnerungen", callback_data="reminder"),
                 InlineKeyboardButton("❓ Hilfe", callback_data="help")
             ]
         ]
@@ -95,7 +96,22 @@ class EnhancedAppointmentHandler:
         query = update.callback_query
         await query.answer()
         
-        if query.data == "today":
+        if query.data == "today_tomorrow":
+            await self.today_tomorrow_appointments_callback(update, context)
+        elif query.data == "recent_memos":
+            await self.memo_handler.show_recent_memos(update, context)
+        elif query.data == "add_appointment":
+            await self.add_appointment_callback(update, context)
+        elif query.data == "add_memo":
+            await self.memo_handler.prompt_for_new_memo(update, context)
+        elif query.data == "help":
+            await self.help_callback(update, context)
+        elif query.data == "main_menu" or query.data == "back_to_menu":
+            await self.show_main_menu(update, context)
+        elif query.data.startswith("partner_relevant_"):
+            await self.handle_partner_relevance_callback(update, context)
+        # Legacy support for old menu items
+        elif query.data == "today":
             await self.today_appointments_callback(update, context)
         elif query.data == "tomorrow":
             await self.tomorrow_appointments_callback(update, context)
@@ -103,14 +119,62 @@ class EnhancedAppointmentHandler:
             await self.list_appointments_callback(update, context)
         elif query.data == "add":
             await self.add_appointment_callback(update, context)
-        elif query.data == "reminder":
-            await self.reminder_callback(update, context)
-        elif query.data == "help":
-            await self.help_callback(update, context)
-        elif query.data == "back_to_menu":
-            await self.show_main_menu(update, context)
-        elif query.data.startswith("partner_relevant_"):
-            await self.handle_partner_relevance_callback(update, context)
+    
+    async def today_tomorrow_appointments_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle combined today and tomorrow appointments callback."""
+        try:
+            # Get appointments for today and tomorrow
+            today_appointments = await self.combined_service.get_today_appointments()
+            tomorrow_appointments = await self.combined_service.get_tomorrow_appointments()
+            
+            today = datetime.now(self.timezone).date()
+            tomorrow = (datetime.now(self.timezone) + timedelta(days=1)).date()
+            
+            message = "📅 *Termine für Heute & Morgen*\n\n"
+            
+            # Today's appointments
+            if today_appointments:
+                message += f"*Heute ({today.strftime('%d.%m.%Y')}):*\n"
+                for i, apt in enumerate(today_appointments, 1):
+                    local_date = apt.date.astimezone(self.timezone) if apt.date.tzinfo else self.timezone.localize(apt.date)
+                    message += f"{i}. 🕐 *{local_date.strftime('%H:%M')}* - {apt.title}"
+                    if apt.location:
+                        message += f" (📍 {apt.location})"
+                    message += "\n"
+                message += "\n"
+            else:
+                message += f"*Heute ({today.strftime('%d.%m.%Y')}):*\nKeine Termine! 🎉\n\n"
+            
+            # Tomorrow's appointments
+            if tomorrow_appointments:
+                message += f"*Morgen ({tomorrow.strftime('%d.%m.%Y')}):*\n"
+                for i, apt in enumerate(tomorrow_appointments, 1):
+                    local_date = apt.date.astimezone(self.timezone) if apt.date.tzinfo else self.timezone.localize(apt.date)
+                    message += f"{i}. 🕐 *{local_date.strftime('%H:%M')}* - {apt.title}"
+                    if apt.location:
+                        message += f" (📍 {apt.location})"
+                    message += "\n"
+            else:
+                message += f"*Morgen ({tomorrow.strftime('%d.%m.%Y')}):*\nKeine Termine! 🎉"
+            
+            if not today_appointments and not tomorrow_appointments:
+                message += "\nPerfekt für eine entspannte Zeit! 🌟"
+            
+            # Add back button
+            keyboard = [[InlineKeyboardButton("🔙 Zurück zum Menü", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting today/tomorrow appointments: {e}")
+            await update.callback_query.edit_message_text(
+                "❌ Fehler beim Abrufen der Termine für heute und morgen."
+            )
     
     async def today_appointments_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle today appointments callback."""
@@ -257,30 +321,47 @@ class EnhancedAppointmentHandler:
     
     async def help_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle help callback."""
-        help_text = """
-❓ *Hilfe - Kalender-Bot*
+        reminder_time = self.user_config.reminder_time
+        help_text = f"""
+❓ *Hilfe - Kalender & Memo Bot*
 
-*Verfügbare Befehle:*
-• `/start` - Hauptmenü anzeigen
-• `/today` - Heutige Termine
-• `/tomorrow` - Morgige Termine
-• `/list` - Kommende Termine
-• `/add` - Neuen Termin hinzufügen
-• `/reminder` - Erinnerungen verwalten
+*📅 Termine erstellen:*
+Schreibe einfach deinen Termin:
+• "morgen 15 Uhr Zahnarzttermin"
+• "Montag 9 Uhr Meeting im Büro"
+• "25.12. 18:30 Weihnachtsessen bei Oma"
 
-*Datenbanken:*
-👤 *Private Datenbank* - Nur deine Termine
-🌐 *Gemeinsame Datenbank* - Termine aller Nutzer
+*📝 Memos erstellen:*
+Schreibe deine Aufgabe oder Notiz:
+• "Präsentation vorbereiten bis Freitag"
+• "Einkaufsliste: Milch, Brot, Butter"
+• "Website Projekt: Client Feedback einholen"
 
-*Zeitformate:*
-• Standard: `14:00`, `14.30`
-• Deutsch: `16 Uhr`, `halb 3`
-• English: `4 PM`, `quarter past 2`
+*⏰ Erinnerungen:*
+Täglich um {reminder_time} Uhr erhältst du eine Übersicht
+deiner Termine für heute und morgen.
 
-*Besonderheiten:*
-• Termine werden aus beiden Datenbanken kombiniert angezeigt
-• Tägliche Erinnerungen um die eingestellte Zeit
-• Intuitive Menüführung mit Buttons
+*🎯 Hauptfunktionen:*
+📅 *Termine Heute & Morgen* - Schnellübersicht
+📝 *Letzte 10 Memos* - Deine aktuellen Aufgaben
+➕ *Neuer Termin* - Termin mit KI-Unterstützung erstellen
+➕ *Neues Memo* - Aufgabe mit KI-Unterstützung erstellen
+
+*🤖 KI-Unterstützung:*
+Der Bot versteht natürliche Sprache! Schreibe einfach
+wie du sprechen würdest:
+• "Zahnarzt morgen um 3" → Termin am nächsten Tag 15:00
+• "Einkaufen bis Freitag" → Memo mit Fälligkeitsdatum
+
+*🗄️ Datenbanken:*
+👤 *Private Termine* - Nur deine Termine
+🌐 *Gemeinsame Termine* - Geteilte Termine
+💼 *Business Termine* - Automatisch aus E-Mails
+📝 *Memos* - Deine Aufgaben und Notizen
+
+*💡 Tipp:*
+Verwende das Hauptmenü für schnellen Zugriff auf alle
+Funktionen. Der Bot lernt aus deinen Eingaben!
         """
         
         # Add back button

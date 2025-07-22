@@ -5,12 +5,11 @@
     {
       "telegram_user_id": 123456789,
       "telegram_username": "user1",
-      "notion_api_key": "secret_xxx_your_private_notion_api_key_1",
+      "notion_api_key": "secret_xxx_your_unified_notion_api_key_1",
       "notion_database_id": "your_private_database_id_1",
-      "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
       "shared_notion_database_id": "your_shared_database_id",
-      "business_notion_api_key": "secret_xxx_your_business_notion_api_key",
       "business_notion_database_id": "1d71778a50cc804e8796dab3dc69eca2",
+      "memo_database_id": "your_memo_database_id_1",
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "08:00",
@@ -25,20 +24,28 @@
       "_ai_features": [
         "GPT-4o-mini Integration für natürliche Sprachverarbeitung",
         "Intelligente Terminextraktion aus beliebigen Texten",
+        "Intelligente Memo/Task-Extraktion mit Fälligkeitsdaten",
         "Partner-Relevanz-Abfrage mit interaktiven Buttons",
         "Automatische Titel-Optimierung für deutsche Sprache",
         "Fallback-Modus wenn AI-Service nicht verfügbar"
+      ],
+      "_memo_features": [
+        "Vereinfachtes Hauptmenü mit Memo-Unterstützung",
+        "KI-gestützte Aufgaben-Extraktion",
+        "Statusverwaltung (Nicht begonnen, In Arbeit, Erledigt)",
+        "Fälligkeitsdatum-Unterstützung",
+        "Projekt- und Bereichskategorien",
+        "Letzte 10 Memos Schnellzugriff"
       ]
     },
     {
       "telegram_user_id": 987654321,
       "telegram_username": "user2", 
-      "notion_api_key": "secret_xxx_your_private_notion_api_key_2",
+      "notion_api_key": "secret_xxx_your_unified_notion_api_key_2",
       "notion_database_id": "your_private_database_id_2",
-      "shared_notion_api_key": "secret_xxx_your_shared_notion_api_key",
       "shared_notion_database_id": "your_shared_database_id",
-      "business_notion_api_key": null,
       "business_notion_database_id": null,
+      "memo_database_id": "your_memo_database_id_2",
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "09:00",
@@ -47,8 +54,11 @@
   ],
   "_setup_instructions": {
     "step_1": "Telegram User ID ermitteln - wird beim ersten /start angezeigt",
-    "step_2": "Notion Integrationen erstellen und API Keys kopieren",
-    "step_3": "Notion Datenbanken erstellen mit Feldern: Name, Datum, Beschreibung, Ort, Tags, PartnerRelevant, OutlookID, Organizer",
+    "step_2": "Notion Integration erstellen und API Key kopieren (nur EINER pro User)",
+    "step_3": "Notion Datenbanken erstellen:",
+    "step_3a": "Private DB: Name, Datum, Beschreibung, Ort, Tags, PartnerRelevant, OutlookID, Organizer",
+    "step_3b": "Memo DB: Aufgabe, Status, Fälligkeitsdatum, Bereich, Projekt, Notizen",
+    "step_3c": "Optional: Shared DB und Business DB mit gleicher Struktur wie Private DB",
     "step_4": "Gmail App-Passwort für Email-Integration erstellen",
     "step_5": "Umgebungsvariablen in .env konfigurieren",
     "step_6": "Bot starten mit: python src/bot.py"
@@ -74,6 +84,16 @@
       "same_structure": "Identical to private database", 
       "purpose": "Individual business calendar (optional per user)",
       "note": "Email sync events - if not configured, uses global business DB"
+    },
+    "memo_database": {
+      "Aufgabe": "Title field (required) - The main task/memo title",
+      "Status": "Status field (required) - Nicht begonnen, In Arbeit, Erledigt",
+      "Fälligkeitsdatum": "Date field (optional) - Due date for the task",
+      "Bereich": "Text field (optional) - Category/area (e.g., Arbeit, Privat)",
+      "Projekt": "Text field (optional) - Project name",
+      "Notizen": "Text field (optional) - Additional notes and details",
+      "purpose": "Individual task/memo database for each user",
+      "note": "AI can extract tasks and organize them automatically"
     }
   }
 }

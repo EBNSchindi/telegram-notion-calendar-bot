@@ -13,12 +13,11 @@ class UserConfig:
     """Configuration for a single user."""
     telegram_user_id: int
     telegram_username: str
-    notion_api_key: str
+    notion_api_key: str  # Single API key for all databases
     notion_database_id: str  # Private database (individual per user)
-    shared_notion_api_key: str = None  # API key for shared database (same for all users)
     shared_notion_database_id: str = None  # Shared database ID (same for all users)
-    business_notion_api_key: str = None  # API key for business database (optional, individual)
     business_notion_database_id: str = None  # Business database ID (optional, individual)
+    memo_database_id: str = None  # Memo database ID (individual per user)
     timezone: str = 'Europe/Berlin'
     language: str = 'de'
     reminder_time: str = '08:00'  # Time for daily reminders
@@ -82,10 +81,9 @@ class UserConfigManager:
                         'telegram_username': user.telegram_username,
                         'notion_api_key': user.notion_api_key,
                         'notion_database_id': user.notion_database_id,
-                        'shared_notion_api_key': user.shared_notion_api_key,
                         'shared_notion_database_id': user.shared_notion_database_id,
-                        'business_notion_api_key': user.business_notion_api_key,
                         'business_notion_database_id': user.business_notion_database_id,
+                        'memo_database_id': user.memo_database_id,
                         'timezone': user.timezone,
                         'language': user.language,
                         'reminder_time': user.reminder_time,
@@ -116,10 +114,9 @@ class UserConfigManager:
                 telegram_username=f'user_{telegram_user_id}',
                 notion_api_key=default.notion_api_key,
                 notion_database_id=default.notion_database_id,
-                shared_notion_api_key=getattr(default, 'shared_notion_api_key', None),
                 shared_notion_database_id=getattr(default, 'shared_notion_database_id', None),
-                business_notion_api_key=getattr(default, 'business_notion_api_key', None),
                 business_notion_database_id=getattr(default, 'business_notion_database_id', None),
+                memo_database_id=getattr(default, 'memo_database_id', None),
                 timezone=getattr(default, 'timezone', 'Europe/Berlin'),
                 language=getattr(default, 'language', 'de'),
                 reminder_time=getattr(default, 'reminder_time', '08:00'),
@@ -204,22 +201,17 @@ class UserConfigManager:
         if not self.is_valid_database_id(user_config.notion_database_id):
             return False
         
-        # Check shared database if configured
-        if user_config.shared_notion_api_key:
-            if not self.is_valid_notion_key(user_config.shared_notion_api_key):
-                return False
-        
+        # Check optional databases if configured
         if user_config.shared_notion_database_id:
             if not self.is_valid_database_id(user_config.shared_notion_database_id):
                 return False
         
-        # Business database is optional, but if configured, should be valid
-        if user_config.business_notion_api_key:
-            if not self.is_valid_notion_key(user_config.business_notion_api_key):
-                return False
-        
         if user_config.business_notion_database_id:
             if not self.is_valid_database_id(user_config.business_notion_database_id):
+                return False
+                
+        if user_config.memo_database_id:
+            if not self.is_valid_database_id(user_config.memo_database_id):
                 return False
         
         return True

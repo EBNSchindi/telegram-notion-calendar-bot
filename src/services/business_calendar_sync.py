@@ -82,24 +82,20 @@ class BusinessCalendarSync:
         """Setup Notion services for business and shared calendars."""
         try:
             # 1. Setup Business Database (individual per user if configured)
-            if (hasattr(self.user_config, 'business_notion_api_key') and
-                hasattr(self.user_config, 'business_notion_database_id') and
-                self.user_config.business_notion_api_key and
+            if (hasattr(self.user_config, 'business_notion_database_id') and
                 self.user_config.business_notion_database_id):
                 
                 # User has individual business database
                 self.business_notion = NotionService(
-                    notion_api_key=self.user_config.business_notion_api_key,
+                    notion_api_key=self.user_config.notion_api_key,
                     database_id=self.user_config.business_notion_database_id
                 )
                 logger.info(f"Using user's business database: {self.user_config.business_notion_database_id}")
                 
             elif self.global_config.get('business_notion_database_id'):
                 # Fall back to global business database
-                business_api_key = (self.user_config.shared_notion_api_key or 
-                                  self.user_config.notion_api_key)
                 self.business_notion = NotionService(
-                    notion_api_key=business_api_key,
+                    notion_api_key=self.user_config.notion_api_key,
                     database_id=self.global_config['business_notion_database_id']
                 )
                 logger.info(f"Using global business database: {self.global_config['business_notion_database_id']}")
@@ -112,15 +108,13 @@ class BusinessCalendarSync:
                 )
                 logger.info("Using private database for business events (no business DB configured)")
             
-            # 2. Setup Shared Database (global - used by all users)
-            shared_api_key = (self.global_config.get('shared_notion_api_key') or
-                            self.user_config.shared_notion_api_key)
+            # 2. Setup Shared Database (global - used by all users)  
             shared_db_id = (self.global_config.get('shared_notion_database_id') or
                           self.user_config.shared_notion_database_id)
             
-            if shared_api_key and shared_db_id:
+            if shared_db_id:
                 self.shared_notion = NotionService(
-                    notion_api_key=shared_api_key,
+                    notion_api_key=self.user_config.notion_api_key,
                     database_id=shared_db_id
                 )
                 logger.info(f"Shared calendar configured: {shared_db_id}")
@@ -223,11 +217,11 @@ class BusinessCalendarSync:
         
         if not business_event:
             logger.warning(f"Failed to parse business event from email {email_msg.uid}")
-            # Mark as read but don't delete - might need manual review
+            # Always delete email after processing
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 executor,
-                self.email_processor.mark_email_as_read,
+                self.email_processor.delete_email,
                 email_msg.uid
             )
             return
@@ -240,7 +234,7 @@ class BusinessCalendarSync:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 executor,
-                self.email_processor.process_email_after_success,
+                self.email_processor.delete_email,
                 email_msg.uid
             )
             return
@@ -254,17 +248,17 @@ class BusinessCalendarSync:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 executor,
-                self.email_processor.process_email_after_success,
+                self.email_processor.delete_email,
                 email_msg.uid
             )
             self.stats['emails_processed'] += 1
             logger.info(f"Successfully processed email {email_msg.uid}")
         else:
-            # Mark as read but don't delete on error
+            # Always delete email after processing
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 executor,
-                self.email_processor.mark_email_as_read,
+                self.email_processor.delete_email,
                 email_msg.uid
             )
             logger.error(f"Failed to process email {email_msg.uid}")

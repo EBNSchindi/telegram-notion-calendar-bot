@@ -241,6 +241,14 @@ class EnhancedCalendarBot:
             await self.start(update, context)
             return
         
+        # Check if user is awaiting memo input
+        if context.user_data.get('awaiting_memo'):
+            user_id = update.effective_user.id
+            handler = self.get_appointment_handler(user_id)
+            if handler and handler.memo_handler:
+                await handler.memo_handler.process_ai_memo_message(update, context)
+                return
+        
         # Check if this is a reply to ForceReply (appointment input from menu)
         if update.message.reply_to_message and "Gib deinen Termin ein" in update.message.reply_to_message.text:
             # Use AI-powered appointment extraction

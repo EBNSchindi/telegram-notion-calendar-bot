@@ -274,6 +274,183 @@ Return ONLY the JSON object, no additional text."""
         
         return appointment_data
 
+    async def extract_memo_from_text(self, text: str, user_timezone: str = 'Europe/Berlin') -> Optional[Dict[str, Any]]:
+        """
+        Extract memo information from natural language text.
+        
+        Args:
+            text: The user's message containing memo/task information
+            user_timezone: The user's timezone
+            
+        Returns:
+            Dictionary with extracted memo data or None if extraction failed
+        """
+        if not self.client:
+            logger.error("OpenAI client not initialized")
+            return None
+        
+        # Get current date/time in user's timezone
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo(user_timezone))
+        current_date = now.strftime('%Y-%m-%d')
+        current_weekday = now.strftime('%A')
+        
+        prompt = f"""You are a memo/task extraction assistant. Extract memo information from the following German or English text.
+
+Current date: {current_date} ({current_weekday})
+User timezone: {user_timezone}
+
+Text: "{text}"
+
+Extract and return a JSON object with the following structure:
+{{
+    "aufgabe": "task/memo title (REQUIRED)",
+    "notizen": "additional notes/details" (null if none),
+    "faelligkeitsdatum": "YYYY-MM-DD" (null if no due date mentioned),
+    "bereich": "category/area" (null if none),
+    "projekt": "project name" (null if none),
+    "confidence": 0.0 to 1.0 (how confident you are in the extraction)
+}}
+
+CRITICAL TASK EXTRACTION RULES:
+1. The "aufgabe" field is REQUIRED and must capture the main task/memo
+2. Transform activities into proper task titles:
+   - "Präsentation vorbereiten bis Freitag" → aufgabe: "Präsentation vorbereiten", faelligkeitsdatum: Friday's date
+   - "Einkaufsliste erstellen - Milch, Brot, Butter" → aufgabe: "Einkaufsliste erstellen", notizen: "Milch, Brot, Butter"
+   - "Call back John about the project" → aufgabe: "John zurückrufen", projekt: "project"
+   - "Remember to book dentist appointment" → aufgabe: "Zahnarzttermin buchen"
+3. Keep task titles concise but descriptive (max 50 characters)
+4. Use German when possible, but keep English if more natural
+
+DATE EXTRACTION RULES:
+1. Only extract dates that are clearly due dates or deadlines
+2. For relative dates like "bis morgen", "bis Freitag", calculate the actual date
+3. For weekday names, find the next occurrence of that weekday
+4. If no year mentioned, assume current year
+5. "heute" = today, "morgen" = tomorrow, "übermorgen" = day after tomorrow
+
+CONTEXT EXTRACTION:
+1. Extract additional details into "notizen" field
+2. If a project is mentioned, extract to "projekt" field
+3. If a category/area is mentioned (work, personal, shopping, etc.), extract to "bereich" field
+4. Don't duplicate information between fields
+
+CONFIDENCE RULES:
+1. High confidence (0.8-1.0): Clear task with actionable content
+2. Medium confidence (0.5-0.7): Somewhat clear task but vague details
+3. Low confidence (0.1-0.4): Unclear or conversational text
+4. If confidence < 0.5, the memo will be rejected
+
+Examples:
+- "Präsentation vorbereiten bis Freitag" → aufgabe: "Präsentation vorbereiten", faelligkeitsdatum: next Friday
+- "Einkaufsliste: Milch, Brot, Butter nicht vergessen" → aufgabe: "Einkaufsliste erstellen", notizen: "Milch, Brot, Butter"
+- "Website Projekt: Feedback von Client einholen" → aufgabe: "Client Feedback einholen", projekt: "Website"
+- "Arbeitsbereich: Meeting notes zusammenfassen" → aufgabe: "Meeting Notes zusammenfassen", bereich: "Arbeit"
+
+Return ONLY the JSON object, no additional text."""
+
+        try:
+            for attempt in range(self.max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        self.client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": "You are a precise memo/task extraction assistant. Always respond with valid JSON only."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.2,
+                            max_tokens=500
+                        ),
+                        timeout=self.timeout
+                    )
+                    
+                    content = response.choices[0].message.content.strip()
+                    
+                    # Try to extract JSON from the response
+                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                    if json_match:
+                        content = json_match.group()
+                    
+                    result = json.loads(content)
+                    
+                    # Validate required fields
+                    if not result.get('aufgabe'):
+                        logger.warning("Missing required 'aufgabe' field in AI response")
+                        return None
+                    
+                    # Validate confidence
+                    if result.get('confidence', 0) < 0.5:
+                        logger.info(f"Low confidence memo extraction: {result.get('confidence')}")
+                        return None
+                    
+                    return result
+                    
+                except asyncio.TimeoutError:
+                    logger.warning(f"OpenAI API timeout (attempt {attempt + 1}/{self.max_retries})")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse AI memo response as JSON: {e}")
+                    logger.debug(f"Response content: {content}")
+                    return None
+                    
+                except Exception as e:
+                    logger.error(f"OpenAI API error (attempt {attempt + 1}/{self.max_retries}): {e}")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+            
+            logger.error("All retry attempts failed for memo extraction")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in extract_memo_from_text: {e}")
+            return None
+
+    async def validate_memo_data(self, memo_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate and clean memo data extracted by AI.
+        
+        Args:
+            memo_data: Raw memo data from AI
+            
+        Returns:
+            Validated and cleaned memo data
+        """
+        # Ensure required field
+        if not memo_data.get('aufgabe'):
+            raise ValueError("Missing required 'aufgabe' field")
+        
+        # Clean and validate aufgabe
+        memo_data['aufgabe'] = memo_data['aufgabe'].strip()
+        if len(memo_data['aufgabe']) > 200:
+            memo_data['aufgabe'] = memo_data['aufgabe'][:197] + '...'
+        
+        # Validate due date format if present
+        if memo_data.get('faelligkeitsdatum'):
+            try:
+                date_obj = datetime.strptime(memo_data['faelligkeitsdatum'], '%Y-%m-%d')
+                memo_data['faelligkeitsdatum'] = date_obj.strftime('%Y-%m-%d')
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid due date format: {memo_data.get('faelligkeitsdatum')}")
+                memo_data['faelligkeitsdatum'] = None
+        
+        # Clean optional fields
+        for field in ['notizen', 'bereich', 'projekt']:
+            if memo_data.get(field):
+                memo_data[field] = memo_data[field].strip()
+                max_lengths = {'notizen': 2000, 'bereich': 100, 'projekt': 100}
+                max_len = max_lengths.get(field, 100)
+                if len(memo_data[field]) > max_len:
+                    memo_data[field] = memo_data[field][:max_len-3] + '...'
+            else:
+                memo_data[field] = None
+        
+        return memo_data
+
     def is_available(self) -> bool:
         """Check if the AI service is available."""
         return self.client is not None

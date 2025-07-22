@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timedelta
 import pytz
-from src.handlers.appointment_handler import AppointmentHandler
+from src.handlers.enhanced_appointment_handler import EnhancedAppointmentHandler as AppointmentHandler
 from src.models.appointment import Appointment
 
 

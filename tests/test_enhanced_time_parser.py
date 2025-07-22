@@ -1,7 +1,7 @@
 """Tests for enhanced TimeParser with English support."""
 import pytest
 from datetime import time
-from src.utils.time_parser import TimeParser
+from src.utils.robust_time_parser import RobustTimeParser as TimeParser
 
 
 class TestEnhancedTimeParser:

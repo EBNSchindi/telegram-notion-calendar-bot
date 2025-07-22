@@ -107,7 +107,7 @@ async def verify_single_user_notion(user_config):
         if business_db_id:
             print(f"📊 Business Database ({business_db_id[:8]}...):")
             await check_notion_database(
-                user_config.shared_notion_api_key or user_config.notion_api_key, 
+                user_config.notion_api_key, 
                 business_db_id,
                 "business"
             )
@@ -124,7 +124,7 @@ async def verify_single_user_notion(user_config):
         if user_config.shared_notion_database_id:
             print(f"📊 Shared Database ({user_config.shared_notion_database_id[:8]}...):")
             await check_notion_database(
-                user_config.shared_notion_api_key, 
+                user_config.notion_api_key, 
                 user_config.shared_notion_database_id,
                 "shared"
             )
