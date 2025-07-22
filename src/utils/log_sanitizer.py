@@ -43,13 +43,28 @@ class SanitizingFormatter(logging.Formatter):
         
         return msg
 
-def setup_secure_logging(log_file: str = 'bot.log', log_level: str = 'INFO'):
-    """Setup logging with sensitive data sanitization."""
+def setup_secure_logging(log_file: str = 'bot.log', log_level: str = 'INFO', enable_debug: bool = False):
+    """Setup logging with sensitive data sanitization.
     
-    # Create sanitizing formatter
-    formatter = SanitizingFormatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    Args:
+        log_file: Path to the log file
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        enable_debug: Enable debug mode with detailed error tracking
+    """
+    
+    # Create different formatters for different use cases
+    if enable_debug:
+        # Detailed format for debugging
+        formatter = SanitizingFormatter(
+            '%(asctime)s - [%(name)s:%(lineno)d] - %(levelname)s - %(funcName)s() - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+    else:
+        # Standard format
+        formatter = SanitizingFormatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
     
     # Configure root logger
     root_logger = logging.getLogger()
@@ -60,7 +75,7 @@ def setup_secure_logging(log_file: str = 'bot.log', log_level: str = 'INFO'):
         root_logger.removeHandler(handler)
     
     # Add file handler with sanitization
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
     file_handler.setFormatter(formatter)
     root_logger.addHandler(file_handler)
     
@@ -69,15 +84,20 @@ def setup_secure_logging(log_file: str = 'bot.log', log_level: str = 'INFO'):
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
     
+    # Configure specific loggers for better granularity
+    loggers_config = {
+        'telegram': log_level,
+        'httpx': 'WARNING',  # Reduce noise from HTTP client
+        'openai': 'INFO',
+        'notion_client': 'INFO',
+        'src.services.ai_assistant_service': 'DEBUG' if enable_debug else 'INFO',
+        'src.handlers.memo_handler': 'DEBUG' if enable_debug else 'INFO',
+        'src.services.partner_sync_service': 'DEBUG' if enable_debug else 'INFO',
+    }
+    
+    for logger_name, level in loggers_config.items():
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(getattr(logging, level.upper()))
+    
     # Log that secure logging is enabled
-    logging.info("Secure logging with data sanitization enabled")
-
-def sanitize_string(text: str) -> str:
-    """Manually sanitize a string of sensitive data."""
-    formatter = SanitizingFormatter()
-    # Create a dummy log record to use the formatter
-    record = logging.LogRecord(
-        name='manual', level=logging.INFO, pathname='', lineno=0,
-        msg=text, args=(), exc_info=None
-    )
-    return formatter.format(record).split(' - ')[-1]  # Extract just the message part
+    logging.info(f"Secure logging enabled - Level: {log_level}, Debug: {enable_debug}")

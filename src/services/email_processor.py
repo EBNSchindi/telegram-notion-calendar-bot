@@ -6,8 +6,7 @@ import asyncio
 import time
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Dict, Tuple
-from email.mime.text import MIMEText
+from typing import List, Optional, Dict
 from dataclasses import dataclass
 from contextlib import contextmanager
 

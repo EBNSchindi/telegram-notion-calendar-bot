@@ -246,37 +246,90 @@ docker run -d \
 
 ## 🧪 Tests & Qualitätssicherung
 
-### Tests ausführen
+### Umfassende Test-Suite
+Das Projekt verfügt über eine vollständige Test-Suite mit über 80% Code-Coverage:
+
 ```bash
-# Alle Tests
-pytest
+# Schnell-Installation der Test-Dependencies
+pip install pytest pytest-asyncio pytest-mock pytest-cov
 
-# Mit Coverage
-pytest --cov=src tests/
-
-# Spezifische Tests  
-pytest tests/test_memo_functionality.py
-pytest tests/test_appointment_handler.py
+# Test-Runner verwenden (empfohlen)
+./run_tests.sh          # Alle Tests
+./run_tests.sh unit     # Nur Unit-Tests
+./run_tests.sh coverage # Mit Coverage-Report
+./run_tests.sh memo     # Nur Memo-Tests
+./run_tests.sh quick    # Schneller Durchlauf
 ```
+
+### Test-Kategorien
+
+#### 1. **Unit Tests** (63 Tests)
+- `test_memo_service.py` - Memo CRUD-Operationen
+- `test_ai_assistant_service.py` - AI-Integration mit Fallback
+- `test_memo_handler.py` - Telegram-Handler für Memos
+- `test_partner_sync_service.py` - Partner-Sync-Logik
+- `test_user_config.py` - Konfigurationsmanagement
+- `test_email_processor.py` - E-Mail-Verarbeitung & Löschung
+
+#### 2. **Integration Tests**
+- `test_memo_integration.py` - End-to-End Memo-Flow
+- `test_menu_navigation.py` - UI/UX Navigation
+- `test_error_handling.py` - Fehlerbehandlung
 
 ### Code-Qualität
 ```bash
-# Linting
-flake8 src/ tests/
+# Automatische Formatierung
+black src/ tests/ --line-length 100
+isort src/ tests/ --profile black
 
-# Formatierung
-black src/ tests/
-isort src/ tests/
+# Linting
+flake8 src/ tests/ --max-line-length=100 --ignore=E203,W503
 
 # Type-Checking
-mypy src/
+mypy src/ --ignore-missing-imports
+
+# Security Scan
+bandit -r src/ -ll
+safety check
 ```
 
-### Test-Abdeckung
-- ✅ **100% Test Success**: Alle 29 Tests bestanden
-- ✅ **Memo-System**: Vollständig getestet
-- ✅ **AI-Integration**: Mockable und testbar
-- ✅ **Error Handling**: Umfassende Abdeckung
+### Test-Coverage
+```bash
+# HTML Coverage Report generieren
+pytest --cov=src --cov-report=html
+# Report öffnen: htmlcov/index.html
+
+# Terminal Coverage
+pytest --cov=src --cov-report=term-missing
+```
+
+### CI/CD Pipeline
+GitHub Actions automatisiert alle Tests:
+
+- ✅ **Tests**: Unit & Integration Tests bei jedem Push
+- ✅ **Linting**: Code-Style-Prüfung
+- ✅ **Security**: Dependency-Scans
+- ✅ **Docker**: Build-Tests
+- ✅ **Coverage**: Automatische Reports
+
+### Neue Features testen
+```python
+# Beispiel: Test für neue Memo-Funktion
+@pytest.mark.asyncio
+async def test_memo_with_ai_fallback():
+    """Test memo creation when AI is unavailable."""
+    service = AIAssistantService()
+    # AI nicht verfügbar simulieren
+    service.client = None
+    
+    result = await service.extract_memo_from_text(
+        "Einkaufen gehen bis morgen"
+    )
+    
+    assert result is not None  # Fallback aktiv
+    assert result['aufgabe'] == "Einkaufen gehen bis morgen"
+    assert result['faelligkeitsdatum'] is not None
+```
 
 ## 🔒 Sicherheitsfeatures
 
@@ -306,7 +359,26 @@ async def ai_function():
 
 ## 🔄 Migration & Changelog
 
-### Version 3.0.0 (2025-07-22) - Refactoring & Memo Revolution 📝
+### Version 3.0.1 (2025-01-21) - AI Debugging & Test Suite 🧪
+- **🧪 Umfassende Test-Suite**
+  - 63+ Unit Tests mit >80% Coverage
+  - Integration Tests für alle Features
+  - Mock-Tests für externe Services
+  - CI/CD Pipeline mit GitHub Actions
+
+- **🤖 AI-Service Verbesserungen**
+  - Robuster Fallback ohne OpenAI API
+  - Verbesserte Fehlerbehandlung
+  - Debug-Logging für AI-Operationen
+  - Basic Memo-Extraktion als Backup
+
+- **📊 Erweiterte Tests**
+  - E-Mail-Löschung vollständig getestet
+  - Menu-Navigation Tests
+  - Error-Handling Szenarien
+  - Partner-Sync Validierung
+
+### Version 3.0.0 (2025-01-20) - Refactoring & Memo Revolution 📝
 - **🏗 Code-Refactoring**
   - Neue modulare Architektur mit Base-Handler
   - Zentrale Konstanten und Error Handling

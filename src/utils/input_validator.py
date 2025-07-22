@@ -2,9 +2,9 @@
 import re
 import html
 import logging
-from typing import Optional, List, Union
-from datetime import datetime, date
-from pydantic import BaseModel, Field, validator, EmailStr
+from typing import Optional, List
+from datetime import datetime
+from pydantic import BaseModel, Field, validator
 from pydantic.error_wrappers import ValidationError
 
 logger = logging.getLogger(__name__)

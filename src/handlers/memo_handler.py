@@ -12,6 +12,16 @@ from src.services.ai_assistant_service import AIAssistantService
 from config.user_config import UserConfig
 from src.utils.rate_limiter import rate_limit
 from pydantic import ValidationError
+from src.constants import (
+    AI_RATE_LIMIT_REQUESTS,
+    AI_RATE_LIMIT_WINDOW,
+    DEFAULT_APPOINTMENTS_LIMIT,
+    MEMO_STATUS_NOT_STARTED,
+    MEMO_STATUS_IN_PROGRESS,
+    MEMO_STATUS_COMPLETED,
+    MenuButtons
+)
+from src.utils.error_handler import BotError, ErrorType, ErrorSeverity, SafeOperationContext
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +52,9 @@ class MemoHandler:
             logger.warning(f"Invalid timezone '{timezone_str}', falling back to Europe/Berlin: {e}")
             self.timezone = pytz.timezone('Europe/Berlin')
     
-    @rate_limit(max_requests=10, time_window=60)
+    @rate_limit(max_requests=AI_RATE_LIMIT_REQUESTS, time_window=AI_RATE_LIMIT_WINDOW)
     async def show_recent_memos(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show the 10 most recent memos."""
+        """Show the most recent memos."""
         if not self.memo_service:
             await update.effective_message.reply_text(
                 "❌ Memo-Datenbank nicht konfiguriert. Bitte wende dich an den Administrator.",
@@ -53,7 +63,7 @@ class MemoHandler:
             return
         
         try:
-            memos = await self.memo_service.get_recent_memos(limit=10)
+            memos = await self.memo_service.get_recent_memos(limit=DEFAULT_APPOINTMENTS_LIMIT)
             
             if not memos:
                 message = "📝 *Deine letzten Memos*\n\nNoch keine Memos vorhanden! 🎯\nErstelle dein erstes Memo mit dem ➕ Button."
@@ -62,9 +72,9 @@ class MemoHandler:
                 for i, memo in enumerate(memos, 1):
                     # Status emoji
                     status_emoji = {
-                        "Nicht begonnen": "⭕",
-                        "In Arbeit": "🔄", 
-                        "Erledigt": "✅"
+                        MEMO_STATUS_NOT_STARTED: "⭕",
+                        MEMO_STATUS_IN_PROGRESS: "🔄", 
+                        MEMO_STATUS_COMPLETED: "✅"
                     }
                     emoji = status_emoji.get(memo.status, "⭕")
                     
@@ -157,17 +167,13 @@ class MemoHandler:
             )
             return
         
-        if not self.ai_service.is_available():
-            await update.effective_message.reply_text(
-                "❌ KI-Service nicht verfügbar. Bitte versuche es später erneut."
-            )
-            return
-        
         user_message = update.message.text
         logger.info(f"Processing memo message: {user_message}")
         
         # Show processing message
-        processing_msg = await update.message.reply_text("🤖 Verarbeite dein Memo...")
+        ai_available = self.ai_service.is_available()
+        processing_text = "🤖 Verarbeite dein Memo..." if ai_available else "📝 Erstelle dein Memo..."
+        processing_msg = await update.message.reply_text(processing_text)
         
         try:
             # Extract memo data using AI
@@ -180,15 +186,20 @@ class MemoHandler:
                 await processing_msg.edit_text(
                     "❌ Konnte kein Memo aus deiner Nachricht extrahieren.\n"
                     "Versuche es mit einer klareren Beschreibung:\n\n"
-                    "*Beispiel:* \"Einkaufen gehen bis morgen\" oder \"Präsentation vorbereiten\""
+                    "*Beispiel:* \"Einkaufen gehen bis morgen\" oder \"Präsentation vorbereiten\"",
+                    parse_mode='Markdown'
                 )
                 return
             
             # Validate memo data
             try:
                 validated_data = await self.ai_service.validate_memo_data(memo_data)
-            except ValueError as e:
-                await processing_msg.edit_text(f"❌ Fehler bei der Memo-Validierung: {e}")
+            except BotError as e:
+                await processing_msg.edit_text(e.user_message)
+                return
+            except Exception as e:
+                logger.error(f"Unexpected error during memo validation: {e}")
+                await processing_msg.edit_text("❌ Fehler bei der Memo-Validierung. Bitte versuche es erneut.")
                 return
             
             # Parse due date if present
@@ -203,7 +214,7 @@ class MemoHandler:
             try:
                 memo = Memo(
                     aufgabe=validated_data['aufgabe'],
-                    status="Nicht begonnen",
+                    status=MEMO_STATUS_NOT_STARTED,
                     faelligkeitsdatum=faelligkeitsdatum,
                     bereich=validated_data.get('bereich'),
                     projekt=validated_data.get('projekt'),
@@ -219,7 +230,8 @@ class MemoHandler:
                 memo.notion_page_id = page_id
                 
                 # Success message
-                success_message = f"✅ *Memo erstellt!*\n\n{memo.format_for_telegram(self.user_config.timezone)}"
+                ai_note = "" if ai_available else "\n\n_💡 Hinweis: Memo ohne KI erstellt_"
+                success_message = f"✅ *Memo erstellt!*\n\n{memo.format_for_telegram(self.user_config.timezone)}{ai_note}"
                 
                 keyboard = [
                     [InlineKeyboardButton("📝 Letzte Memos", callback_data="recent_memos")],
@@ -233,7 +245,7 @@ class MemoHandler:
                     reply_markup=reply_markup
                 )
                 
-                logger.info(f"Successfully created memo: {memo.aufgabe}")
+                logger.info(f"Successfully created memo: {memo.aufgabe} (AI: {ai_available})")
                 
             except Exception as e:
                 logger.error(f"Error creating memo in Notion: {e}")
@@ -242,8 +254,11 @@ class MemoHandler:
                     "Bitte überprüfe deine Datenbankverbindung."
                 )
         
+        except BotError as e:
+            logger.error(f"Bot error processing memo message: {e}")
+            await processing_msg.edit_text(e.user_message)
         except Exception as e:
-            logger.error(f"Error processing memo message: {e}")
+            logger.error(f"Unexpected error processing memo message: {e}", exc_info=True)
             await processing_msg.edit_text(
                 "❌ Unerwarteter Fehler beim Verarbeiten deines Memos. "
                 "Bitte versuche es erneut."

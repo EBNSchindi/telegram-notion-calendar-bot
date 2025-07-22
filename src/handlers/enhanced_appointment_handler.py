@@ -10,11 +10,21 @@ from src.models.appointment import Appointment
 from src.services.combined_appointment_service import CombinedAppointmentService
 from src.services.ai_assistant_service import AIAssistantService
 from src.handlers.memo_handler import MemoHandler
-from config.user_config import UserConfig
+from config.user_config import UserConfig, UserConfigManager
 from src.utils.robust_time_parser import RobustTimeParser
 from src.utils.rate_limiter import rate_limit
 from src.utils.input_validator import InputValidator
 from pydantic import ValidationError
+from src.constants import (
+    DEFAULT_RATE_LIMIT_REQUESTS,
+    DEFAULT_RATE_LIMIT_WINDOW,
+    AI_RATE_LIMIT_REQUESTS,
+    AI_RATE_LIMIT_WINDOW,
+    DEFAULT_APPOINTMENTS_LIMIT,
+    MAX_ERROR_MESSAGE_LENGTH,
+    MenuButtons,
+    CallbackData
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +32,10 @@ logger = logging.getLogger(__name__)
 class EnhancedAppointmentHandler:
     """Enhanced handler for appointment-related Telegram commands with combined database support."""
     
-    def __init__(self, user_config: UserConfig):
+    def __init__(self, user_config: UserConfig, user_config_manager: Optional[UserConfigManager] = None):
         self.user_config = user_config
-        self.combined_service = CombinedAppointmentService(user_config)
+        self.user_config_manager = user_config_manager
+        self.combined_service = CombinedAppointmentService(user_config, user_config_manager)
         self.ai_service = AIAssistantService()
         self.memo_handler = MemoHandler(user_config)
         
@@ -36,7 +47,7 @@ class EnhancedAppointmentHandler:
             logger.warning(f"Invalid timezone '{timezone_str}', falling back to Europe/Berlin: {e}")
             self.timezone = pytz.timezone('Europe/Berlin')
     
-    @rate_limit(max_requests=20, time_window=60)  # 20 requests per minute for menu
+    @rate_limit(max_requests=DEFAULT_RATE_LIMIT_REQUESTS, time_window=DEFAULT_RATE_LIMIT_WINDOW)
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the main menu with inline buttons."""
         user = update.effective_user
@@ -63,15 +74,15 @@ class EnhancedAppointmentHandler:
         # Create simplified inline keyboard (2x2 + 1)
         keyboard = [
             [
-                InlineKeyboardButton("📅 Termine Heute & Morgen", callback_data="today_tomorrow"),
-                InlineKeyboardButton("📝 Letzte 10 Memos", callback_data="recent_memos")
+                InlineKeyboardButton(MenuButtons.TODAY_TOMORROW, callback_data=CallbackData.TODAY_TOMORROW),
+                InlineKeyboardButton(MenuButtons.RECENT_MEMOS, callback_data=CallbackData.RECENT_MEMOS)
             ],
             [
-                InlineKeyboardButton("➕ Neuer Termin", callback_data="add_appointment"),
-                InlineKeyboardButton("➕ Neues Memo", callback_data="add_memo")
+                InlineKeyboardButton(MenuButtons.NEW_APPOINTMENT, callback_data=CallbackData.ADD_APPOINTMENT),
+                InlineKeyboardButton(MenuButtons.NEW_MEMO, callback_data=CallbackData.ADD_MEMO)
             ],
             [
-                InlineKeyboardButton("❓ Hilfe", callback_data="help")
+                InlineKeyboardButton(MenuButtons.HELP, callback_data=CallbackData.HELP)
             ]
         ]
         
@@ -96,15 +107,15 @@ class EnhancedAppointmentHandler:
         query = update.callback_query
         await query.answer()
         
-        if query.data == "today_tomorrow":
+        if query.data == CallbackData.TODAY_TOMORROW:
             await self.today_tomorrow_appointments_callback(update, context)
-        elif query.data == "recent_memos":
+        elif query.data == CallbackData.RECENT_MEMOS:
             await self.memo_handler.show_recent_memos(update, context)
-        elif query.data == "add_appointment":
+        elif query.data == CallbackData.ADD_APPOINTMENT:
             await self.add_appointment_callback(update, context)
-        elif query.data == "add_memo":
+        elif query.data == CallbackData.ADD_MEMO:
             await self.memo_handler.prompt_for_new_memo(update, context)
-        elif query.data == "help":
+        elif query.data == CallbackData.HELP:
             await self.help_callback(update, context)
         elif query.data == "main_menu" or query.data == "back_to_menu":
             await self.show_main_menu(update, context)
@@ -852,13 +863,3 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
                 f"Fehler: {str(e)[:100]}...\n\n"
                 f"Bitte versuche es erneut oder nutze /start für das Hauptmenü."
             )
-    
-    def create_partner_relevance_keyboard(self, user_id: int) -> InlineKeyboardMarkup:
-        """Create inline keyboard for partner relevance query."""
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Ja", callback_data=f"partner_relevant_yes_{user_id}"),
-                InlineKeyboardButton("❌ Nein", callback_data=f"partner_relevant_no_{user_id}")
-            ]
-        ]
-        return InlineKeyboardMarkup(keyboard)

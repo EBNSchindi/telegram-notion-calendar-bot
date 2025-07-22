@@ -7,6 +7,23 @@ import json
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 import re
+from src.constants import (
+    AI_MODEL,
+    AI_TEMPERATURE,
+    AI_MAX_TOKENS,
+    AI_MAX_RETRIES,
+    AI_RETRY_DELAY,
+    AI_TIMEOUT,
+    AI_FALLBACK_CONFIDENCE,
+    AI_MIN_CONFIDENCE,
+    MAX_APPOINTMENT_TITLE_LENGTH,
+    MAX_DESCRIPTION_LENGTH,
+    MAX_LOCATION_LENGTH,
+    MAX_MEMO_TITLE_LENGTH,
+    MAX_MEMO_NOTES_LENGTH,
+    MEMO_STATUS_NOT_STARTED
+)
+from src.utils.error_handler import BotError, ErrorType, ErrorSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +44,9 @@ class AIAssistantService:
                 logger.error(f"Failed to initialize OpenAI client: {e}")
                 self.client = None
         
-        self.max_retries = 3
-        self.retry_delay = 1
-        self.timeout = 30
+        self.max_retries = AI_MAX_RETRIES
+        self.retry_delay = AI_RETRY_DELAY
+        self.timeout = AI_TIMEOUT
         
         # German month names for parsing
         self.german_months = {
@@ -56,7 +73,7 @@ class AIAssistantService:
             Dictionary with extracted appointment data or None if extraction failed
         """
         if not self.client:
-            logger.error("OpenAI client not initialized")
+            logger.warning("OpenAI client not initialized - AI extraction unavailable")
             return None
         
         # Get current date/time in user's timezone
@@ -128,13 +145,13 @@ Return ONLY the JSON object, no additional text."""
                 try:
                     response = await asyncio.wait_for(
                         self.client.chat.completions.create(
-                            model="gpt-4o-mini",
+                            model=AI_MODEL,
                             messages=[
                                 {"role": "system", "content": "You are a precise appointment extraction assistant. Always respond with valid JSON only."},
                                 {"role": "user", "content": prompt}
                             ],
-                            temperature=0.2,
-                            max_tokens=500
+                            temperature=AI_TEMPERATURE,
+                            max_tokens=AI_MAX_TOKENS
                         ),
                         timeout=self.timeout
                     )
@@ -154,7 +171,7 @@ Return ONLY the JSON object, no additional text."""
                         return None
                     
                     # Validate confidence
-                    if result.get('confidence', 0) < 0.5:
+                    if result.get('confidence', 0) < AI_MIN_CONFIDENCE:
                         logger.info(f"Low confidence extraction: {result.get('confidence')}")
                         return None
                     
@@ -169,7 +186,12 @@ Return ONLY the JSON object, no additional text."""
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse AI response as JSON: {e}")
                     logger.debug(f"Response content: {content}")
-                    return None
+                    raise BotError(
+                        f"Failed to parse AI response: {str(e)}",
+                        ErrorType.AI_SERVICE,
+                        ErrorSeverity.MEDIUM,
+                        user_message="🤖 KI-Antwort konnte nicht verarbeitet werden. Bitte versuche es erneut."
+                    )
                     
                 except Exception as e:
                     logger.error(f"OpenAI API error (attempt {attempt + 1}/{self.max_retries}): {e}")
@@ -180,9 +202,16 @@ Return ONLY the JSON object, no additional text."""
             logger.error("All retry attempts failed")
             return None
             
+        except BotError:
+            raise
         except Exception as e:
             logger.error(f"Unexpected error in extract_appointment_from_text: {e}")
-            return None
+            raise BotError(
+                f"Unexpected error during appointment extraction: {str(e)}",
+                ErrorType.AI_SERVICE,
+                ErrorSeverity.MEDIUM,
+                user_message="🤖 Unerwarteter Fehler bei der Terminextraktion. Bitte versuche es erneut."
+            )
 
     async def improve_appointment_title(self, title: str) -> str:
         """
@@ -200,7 +229,7 @@ Return ONLY the JSON object, no additional text."""
         try:
             response = await asyncio.wait_for(
                 self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=AI_MODEL,
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant that improves appointment titles to be clear and descriptive in German. Keep titles concise (max 50 characters)."},
                         {"role": "user", "content": f"Improve this appointment title to be more descriptive but keep it short: '{title}'. Return only the improved title, nothing else."}
@@ -245,7 +274,12 @@ Return ONLY the JSON object, no additional text."""
             appointment_data['date'] = date_obj.strftime('%Y-%m-%d')
         except (ValueError, KeyError):
             logger.error(f"Invalid date format: {appointment_data.get('date')}")
-            raise ValueError("Invalid date format")
+            raise BotError(
+                f"Invalid date format: {appointment_data.get('date')}",
+                ErrorType.VALIDATION,
+                ErrorSeverity.LOW,
+                user_message="❌ Ungültiges Datumsformat. Bitte versuche es erneut."
+            )
         
         # Validate time format if present
         if appointment_data.get('time'):
@@ -286,8 +320,8 @@ Return ONLY the JSON object, no additional text."""
             Dictionary with extracted memo data or None if extraction failed
         """
         if not self.client:
-            logger.error("OpenAI client not initialized")
-            return None
+            logger.warning("OpenAI client not initialized - falling back to basic extraction")
+            return self._basic_memo_extraction(text)
         
         # Get current date/time in user's timezone
         from zoneinfo import ZoneInfo
@@ -422,7 +456,12 @@ Return ONLY the JSON object, no additional text."""
         """
         # Ensure required field
         if not memo_data.get('aufgabe'):
-            raise ValueError("Missing required 'aufgabe' field")
+            raise BotError(
+                "Missing required 'aufgabe' field in memo data",
+                ErrorType.VALIDATION,
+                ErrorSeverity.LOW,
+                user_message="❌ Aufgabe konnte nicht erkannt werden. Bitte formuliere deine Aufgabe klarer."
+            )
         
         # Clean and validate aufgabe
         memo_data['aufgabe'] = memo_data['aufgabe'].strip()
@@ -454,3 +493,85 @@ Return ONLY the JSON object, no additional text."""
     def is_available(self) -> bool:
         """Check if the AI service is available."""
         return self.client is not None
+    
+    def _basic_memo_extraction(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Basic memo extraction without AI for fallback.
+        
+        Args:
+            text: The user's message
+            
+        Returns:
+            Dictionary with basic memo data or None if extraction failed
+        """
+        try:
+            # Clean up the text
+            text = text.strip()
+            if not text:
+                return None
+            
+            # Basic extraction - use the entire text as task
+            memo_data = {
+                "aufgabe": text[:200],  # Limit to 200 chars
+                "notizen": None,
+                "faelligkeitsdatum": None,
+                "bereich": None,
+                "projekt": None,
+                "confidence": AI_FALLBACK_CONFIDENCE  # Medium confidence for basic extraction
+            }
+            
+            # Try to detect due dates (basic patterns)
+            date_patterns = [
+                (r'\bbis\s+(morgen|heute|übermorgen)\b', 'relative'),
+                (r'\bbis\s+(\d{1,2})\.(\d{1,2})\.?(?:(\d{4}|\d{2}))?\b', 'date'),
+                (r'\bfällig\s+am\s+(\d{1,2})\.(\d{1,2})\.?(?:(\d{4}|\d{2}))?\b', 'date')
+            ]
+            
+            import re
+            from datetime import datetime, timedelta
+            
+            for pattern, pattern_type in date_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    if pattern_type == 'relative':
+                        relative_date = match.group(1).lower()
+                        today = datetime.now().date()
+                        if relative_date == 'heute':
+                            memo_data['faelligkeitsdatum'] = today.strftime('%Y-%m-%d')
+                        elif relative_date == 'morgen':
+                            memo_data['faelligkeitsdatum'] = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+                        elif relative_date == 'übermorgen':
+                            memo_data['faelligkeitsdatum'] = (today + timedelta(days=2)).strftime('%Y-%m-%d')
+                    elif pattern_type == 'date':
+                        day = int(match.group(1))
+                        month = int(match.group(2))
+                        year_match = match.group(3)
+                        
+                        if year_match:
+                            year = int(year_match) if len(year_match) == 4 else 2000 + int(year_match)
+                        else:
+                            year = datetime.now().year
+                        
+                        try:
+                            date_obj = datetime(year, month, day)
+                            # If date is in the past, assume next year
+                            if date_obj.date() < datetime.now().date():
+                                date_obj = date_obj.replace(year=year + 1)
+                            memo_data['faelligkeitsdatum'] = date_obj.strftime('%Y-%m-%d')
+                        except ValueError:
+                            pass
+                    break
+            
+            # Try to detect project or area keywords
+            project_keywords = ['projekt', 'project', 'arbeit', 'work', 'privat', 'personal']
+            for keyword in project_keywords:
+                if keyword in text.lower():
+                    memo_data['bereich'] = keyword.capitalize()
+                    break
+            
+            logger.info(f"Basic memo extraction result: {memo_data}")
+            return memo_data
+            
+        except Exception as e:
+            logger.error(f"Error in basic memo extraction: {e}")
+            return None

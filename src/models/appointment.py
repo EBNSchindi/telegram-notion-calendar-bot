@@ -2,15 +2,20 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 import pytz
+from src.constants import (
+    MAX_APPOINTMENT_TITLE_LENGTH,
+    MAX_DESCRIPTION_LENGTH,
+    MAX_LOCATION_LENGTH
+)
 
 
 class Appointment(BaseModel):
     """Appointment model for calendar events."""
     
-    title: str = Field(..., min_length=1, max_length=200, description="Appointment title")
+    title: str = Field(..., min_length=1, max_length=MAX_APPOINTMENT_TITLE_LENGTH, description="Appointment title")
     date: datetime = Field(..., description="Appointment date and time")
-    description: Optional[str] = Field(None, max_length=1000, description="Optional description")
-    location: Optional[str] = Field(None, max_length=200, description="Optional location")
+    description: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH, description="Optional description")
+    location: Optional[str] = Field(None, max_length=MAX_LOCATION_LENGTH, description="Optional location")
     tags: Optional[List[str]] = Field(None, description="Optional tags")
     notion_page_id: Optional[str] = Field(None, description="Notion page ID after creation")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
@@ -23,6 +28,11 @@ class Appointment(BaseModel):
     
     # Partner relevance field
     partner_relevant: bool = Field(False, description="Whether this appointment is relevant for partner")
+    
+    # Sync tracking fields for partner sync service
+    synced_to_shared_id: Optional[str] = Field(None, description="ID of synced appointment in shared database")
+    source_private_id: Optional[str] = Field(None, description="ID of source appointment in private database")
+    source_user_id: Optional[int] = Field(None, description="Telegram user ID of appointment creator")
     
     @field_validator('date')
     @classmethod
@@ -133,6 +143,34 @@ class Appointment(BaseModel):
             "checkbox": self.partner_relevant
         }
         
+        # Sync tracking fields for partner sync service
+        if self.synced_to_shared_id:
+            properties["SyncedToSharedId"] = {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.synced_to_shared_id
+                        }
+                    }
+                ]
+            }
+        
+        if self.source_private_id:
+            properties["SourcePrivateId"] = {
+                "rich_text": [
+                    {
+                        "text": {
+                            "content": self.source_private_id
+                        }
+                    }
+                ]
+            }
+        
+        if self.source_user_id:
+            properties["SourceUserId"] = {
+                "number": self.source_user_id
+            }
+        
         return properties
     
     @classmethod
@@ -194,6 +232,22 @@ class Appointment(BaseModel):
         if partner_prop.get('checkbox') is not None:
             partner_relevant = partner_prop['checkbox']
         
+        # Extract sync tracking fields (handle potential whitespace in property names)
+        synced_to_shared_id = None
+        sync_prop = properties.get('SyncedToSharedId', {})
+        if sync_prop.get('rich_text') and sync_prop['rich_text']:
+            synced_to_shared_id = sync_prop['rich_text'][0]['text']['content']
+        
+        source_private_id = None
+        source_prop = properties.get('SourcePrivateId', {})
+        if source_prop.get('rich_text') and source_prop['rich_text']:
+            source_private_id = source_prop['rich_text'][0]['text']['content']
+        
+        source_user_id = None
+        user_prop = properties.get('SourceUserId', {})
+        if user_prop.get('number') is not None:
+            source_user_id = user_prop['number']
+        
         # Extract creation date (use page creation time as fallback)
         created_at = datetime.fromisoformat(page['created_time'].replace('Z', '+00:00'))
         
@@ -209,7 +263,10 @@ class Appointment(BaseModel):
             organizer=organizer,
             duration_minutes=duration_minutes,
             is_business_event=is_business_event,
-            partner_relevant=partner_relevant
+            partner_relevant=partner_relevant,
+            synced_to_shared_id=synced_to_shared_id,
+            source_private_id=source_private_id,
+            source_user_id=source_user_id
         )
     
     def format_for_telegram(self, timezone: str = "Europe/Berlin") -> str:

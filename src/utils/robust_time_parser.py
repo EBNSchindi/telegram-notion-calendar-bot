@@ -1,7 +1,7 @@
 """Robust time parser with enhanced error handling and validation."""
 import re
 from datetime import time
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 import logging
 
 logger = logging.getLogger(__name__)

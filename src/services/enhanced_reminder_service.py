@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 import pytz
 from telegram import Bot
 from telegram.error import TelegramError

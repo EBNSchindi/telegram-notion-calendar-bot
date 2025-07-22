@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from src.models.appointment import Appointment
 from src.services.notion_service import NotionService
-from config.user_config import UserConfig
+from config.user_config import UserConfig, UserConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,9 @@ class AppointmentSource:
 class CombinedAppointmentService:
     """Service that combines appointments from private and shared databases."""
     
-    def __init__(self, user_config: UserConfig):
+    def __init__(self, user_config: UserConfig, user_config_manager: Optional[UserConfigManager] = None):
         self.user_config = user_config
+        self.user_config_manager = user_config_manager
         
         # Handle timezone with fallback
         timezone_str = user_config.timezone if user_config.timezone else 'Europe/Berlin'
@@ -131,6 +132,7 @@ class CombinedAppointmentService:
     async def create_appointment(self, appointment: Appointment, use_shared: bool = False) -> str:
         """
         Create appointment in either private or shared database.
+        Enhanced with partner sync functionality.
         
         Args:
             appointment: Appointment to create
@@ -139,10 +141,34 @@ class CombinedAppointmentService:
         Returns:
             Notion page ID of created appointment
         """
+        # Create the appointment in the target database
         if use_shared and self.shared_service:
-            return await self.shared_service.create_appointment(appointment)
+            page_id = await self.shared_service.create_appointment(appointment)
         else:
-            return await self.private_service.create_appointment(appointment)
+            page_id = await self.private_service.create_appointment(appointment)
+            
+            # If creating in private DB and appointment is partner-relevant, sync to shared DB
+            if appointment.partner_relevant and self.user_config_manager:
+                try:
+                    # Import here to avoid circular dependency
+                    from src.services.partner_sync_service import PartnerSyncService
+                    
+                    sync_service = PartnerSyncService(self.user_config_manager)
+                    appointment.notion_page_id = page_id  # Set the page ID for sync
+                    
+                    # Sync immediately
+                    await sync_service.sync_single_appointment(
+                        appointment, 
+                        self.user_config,
+                        force_sync=True
+                    )
+                    logger.info(f"Automatically synced partner-relevant appointment {page_id} to shared database")
+                    
+                except Exception as e:
+                    logger.error(f"Error during immediate partner sync: {e}")
+                    # Don't fail the appointment creation if sync fails
+        
+        return page_id
     
     async def test_connections(self) -> Tuple[bool, bool]:
         """

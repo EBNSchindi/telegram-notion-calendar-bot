@@ -19,7 +19,10 @@ from src.services.business_calendar_sync import create_sync_manager_from_env
 
 # Enable secure logging with data sanitization
 from utils.log_sanitizer import setup_secure_logging
-setup_secure_logging('bot.log', 'INFO')
+# Enable debug mode if DEBUG env var is set
+debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'
+log_level = os.getenv('LOG_LEVEL', 'INFO')
+setup_secure_logging('bot.log', log_level, enable_debug=debug_mode)
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +33,7 @@ class EnhancedCalendarBot:
         self.application = None
         self.reminder_service = None
         self.business_sync_manager = None
+        self.partner_sync_service = None  # Partner sync service
         self._handlers = {}  # Cache for user handlers
         self.debug_handler = DebugHandler(self.user_config_manager)  # Debug utilities
         
@@ -42,7 +46,7 @@ class EnhancedCalendarBot:
         if not user_config:
             return None
         
-        handler = EnhancedAppointmentHandler(user_config)
+        handler = EnhancedAppointmentHandler(user_config, self.user_config_manager)
         self._handlers[user_id] = handler
         return handler
     
@@ -336,6 +340,31 @@ class EnhancedCalendarBot:
         await self.reminder_service.start()
         logger.info("Enhanced reminder service started")
         
+        # Start partner sync service
+        try:
+            import os
+            partner_sync_enabled = os.getenv('PARTNER_SYNC_ENABLED', 'true').lower() == 'true'
+            
+            if partner_sync_enabled:
+                from src.services.partner_sync_service import PartnerSyncService
+                
+                self.partner_sync_service = PartnerSyncService(self.user_config_manager)
+                
+                # Get sync interval from environment or default to 2 hours
+                sync_interval = int(os.getenv('PARTNER_SYNC_INTERVAL_HOURS', '2'))
+                
+                # Start background sync
+                asyncio.create_task(
+                    self.partner_sync_service.start_background_sync(interval_hours=sync_interval)
+                )
+                logger.info(f"Partner sync service started (interval: {sync_interval}h)")
+            else:
+                logger.info("Partner sync service disabled by configuration")
+            
+        except Exception as e:
+            logger.error(f"Failed to start partner sync service: {e}")
+            # Don't fail the whole bot if partner sync fails
+        
         # Start business calendar sync
         try:
             self.business_sync_manager = create_sync_manager_from_env()
@@ -370,6 +399,10 @@ class EnhancedCalendarBot:
         if self.reminder_service:
             await self.reminder_service.stop()
             logger.info("Enhanced reminder service stopped")
+        
+        if self.partner_sync_service:
+            self.partner_sync_service.stop_background_sync()
+            logger.info("Partner sync service stopped")
         
         if self.business_sync_manager:
             self.business_sync_manager.stop_all_syncs()

@@ -2,17 +2,27 @@ from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 import pytz
+from src.constants import (
+    MAX_MEMO_TITLE_LENGTH,
+    MAX_CATEGORY_LENGTH,
+    MAX_PROJECT_LENGTH,
+    MAX_MEMO_NOTES_LENGTH,
+    MAX_NOTES_PREVIEW_LENGTH,
+    MEMO_STATUS_NOT_STARTED,
+    MEMO_STATUS_IN_PROGRESS,
+    MEMO_STATUS_COMPLETED
+)
 
 
 class Memo(BaseModel):
     """Memo model for tasks and notes."""
     
-    aufgabe: str = Field(..., min_length=1, max_length=200, description="Task/memo title - REQUIRED")
-    status: str = Field(default="Nicht begonnen", description="Task status")
+    aufgabe: str = Field(..., min_length=1, max_length=MAX_MEMO_TITLE_LENGTH, description="Task/memo title - REQUIRED")
+    status: str = Field(default=MEMO_STATUS_NOT_STARTED, description="Task status")
     faelligkeitsdatum: Optional[datetime] = Field(None, description="Optional due date")
-    bereich: Optional[str] = Field(None, max_length=100, description="Optional area/category")
-    projekt: Optional[str] = Field(None, max_length=100, description="Optional project")
-    notizen: Optional[str] = Field(None, max_length=2000, description="Optional additional notes")
+    bereich: Optional[str] = Field(None, max_length=MAX_CATEGORY_LENGTH, description="Optional area/category")
+    projekt: Optional[str] = Field(None, max_length=MAX_PROJECT_LENGTH, description="Optional project")
+    notizen: Optional[str] = Field(None, max_length=MAX_MEMO_NOTES_LENGTH, description="Optional additional notes")
     notion_page_id: Optional[str] = Field(None, description="Notion page ID after creation")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
     
@@ -28,10 +38,10 @@ class Memo(BaseModel):
     @classmethod
     def validate_status(cls, v):
         """Validate status is one of the allowed values."""
-        allowed_statuses = ["Nicht begonnen", "In Arbeit", "Erledigt"]
+        allowed_statuses = [MEMO_STATUS_NOT_STARTED, MEMO_STATUS_IN_PROGRESS, MEMO_STATUS_COMPLETED]
         if v not in allowed_statuses:
             # Default to "Nicht begonnen" if invalid status provided
-            return "Nicht begonnen"
+            return MEMO_STATUS_NOT_STARTED
         return v
     
     def to_notion_properties(self, timezone: str = "Europe/Berlin") -> dict:
@@ -112,7 +122,7 @@ class Memo(BaseModel):
             raise ValueError("Missing or empty 'Aufgabe' field in Notion page")
         
         # Extract status (from "Status" field)
-        status = "Nicht begonnen"  # Default
+        status = MEMO_STATUS_NOT_STARTED  # Default
         status_prop = properties.get('Status', {})
         if status_prop.get('status') and status_prop['status'].get('name'):
             status = status_prop['status']['name']
@@ -166,9 +176,9 @@ class Memo(BaseModel):
         
         # Status with emoji
         status_emoji = {
-            "Nicht begonnen": "⭕",
-            "In Arbeit": "🔄", 
-            "Erledigt": "✅"
+            MEMO_STATUS_NOT_STARTED: "⭕",
+            MEMO_STATUS_IN_PROGRESS: "🔄", 
+            MEMO_STATUS_COMPLETED: "✅"
         }
         emoji = status_emoji.get(self.status, "⭕")
         formatted += f"{emoji} Status: {self.status}\n"
@@ -189,7 +199,7 @@ class Memo(BaseModel):
         
         # Notes if available (truncated for display)
         if self.notizen:
-            notes_display = self.notizen[:100] + "..." if len(self.notizen) > 100 else self.notizen
+            notes_display = self.notizen[:MAX_NOTES_PREVIEW_LENGTH] + "..." if len(self.notizen) > MAX_NOTES_PREVIEW_LENGTH else self.notizen
             formatted += f"🗒️ Notizen: {notes_display}\n"
         
         return formatted

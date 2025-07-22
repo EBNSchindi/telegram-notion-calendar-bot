@@ -146,3 +146,46 @@ site/
 
 # Performance profiling
 .prof
+*.prof
+*.stats
+
+# Test outputs
+test-results/
+test-reports/
+.test_cache/
+
+# Lock files (should be committed for apps, not for libraries)
+# Uncomment if this is a library
+# poetry.lock
+# Pipfile.lock
+
+# Generated files
+*.generated.py
+*.auto.py
+
+# Archives
+*.zip
+*.tar.gz
+*.tar.bz2
+*.7z
+*.rar
+
+# Local scripts
+local_*.py
+local_*.sh
+test_*.sh
+
+# VS Code specific
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ specific
+.idea/*
+*.iml
+*.iws
+*.ipr
+out/

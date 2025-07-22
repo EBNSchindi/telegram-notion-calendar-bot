@@ -5,6 +5,7 @@ from notion_client.errors import APIResponseError
 from src.models.appointment import Appointment
 from config.settings import Settings
 from config.user_config import UserConfig
+from src.utils.error_handler import BotError, ErrorType, ErrorSeverity, handle_bot_error
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,11 @@ class NotionService:
         else:
             # Multi-user support
             if not notion_api_key or not database_id:
-                raise ValueError("notion_api_key and database_id are required")
+                raise BotError(
+                    "notion_api_key and database_id are required",
+                    ErrorType.VALIDATION,
+                    ErrorSeverity.HIGH
+                )
             self.settings = None
             self.client = Client(auth=notion_api_key)
             self.database_id = database_id
@@ -44,6 +49,7 @@ class NotionService:
             database_id=user_config.notion_database_id
         )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
     async def create_appointment(self, appointment: Appointment) -> str:
         """
         Create a new appointment in Notion database.
@@ -55,7 +61,7 @@ class NotionService:
             str: Notion page ID of created appointment
             
         Raises:
-            APIResponseError: If Notion API request fails
+            BotError: If Notion API request fails
         """
         try:
             properties = appointment.to_notion_properties(self.settings.timezone if self.settings else 'Europe/Berlin')
@@ -72,8 +78,14 @@ class NotionService:
             
         except APIResponseError as e:
             logger.error(f"Failed to create appointment in Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to create appointment in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Erstellen des Termins in Notion. Bitte versuche es erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
     async def get_appointments(self, limit: int = 10) -> List[Appointment]:
         """
         Get appointments from Notion database.
@@ -110,8 +122,42 @@ class NotionService:
             
         except APIResponseError as e:
             logger.error(f"Failed to retrieve appointments from Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to retrieve appointments from Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Laden der Termine aus Notion. Bitte versuche es später erneut."
+            )
     
+    async def get_appointment_by_id(self, page_id: str) -> Optional[Appointment]:
+        """
+        Get a specific appointment by its Notion page ID.
+        
+        Args:
+            page_id: Notion page ID
+            
+        Returns:
+            Appointment object if found, None otherwise
+        """
+        try:
+            response = self.client.pages.retrieve(page_id=page_id)
+            
+            if response and not response.get('archived', False):
+                appointment = Appointment.from_notion_page(response)
+                logger.info(f"Retrieved appointment by ID: {page_id}")
+                return appointment
+            else:
+                logger.warning(f"Appointment {page_id} not found or archived")
+                return None
+                
+        except APIResponseError as e:
+            logger.error(f"Failed to retrieve appointment by ID {page_id}: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to parse appointment from page {page_id}: {e}")
+            return None
+    
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
     async def update_appointment(self, page_id: str, appointment: Appointment) -> bool:
         """
         Update an existing appointment in Notion.
@@ -136,9 +182,15 @@ class NotionService:
             
         except APIResponseError as e:
             logger.error(f"Failed to update appointment in Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to update appointment in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Aktualisieren des Termins in Notion. Bitte versuche es erneut."
+            )
     
-    def delete_appointment(self, page_id: str) -> bool:
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
+    async def delete_appointment(self, page_id: str) -> bool:
         """
         Delete an appointment from Notion (archive it).
         
@@ -159,7 +211,12 @@ class NotionService:
             
         except APIResponseError as e:
             logger.error(f"Failed to delete appointment in Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to delete appointment in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Löschen des Termins in Notion. Bitte versuche es erneut."
+            )
     
     def find_appointment_by_outlook_id(self, outlook_id: str) -> Optional[str]:
         """
@@ -233,4 +290,7 @@ class NotionService:
             
         except APIResponseError as e:
             logger.error(f"Notion connection test failed: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error during connection test: {e}")
             return False

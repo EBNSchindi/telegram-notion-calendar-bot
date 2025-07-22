@@ -92,37 +92,6 @@ class TelegramFormatter:
             f"Wähle eine Option:"
         )
     
-    @staticmethod
-    def format_memo_list(memos: List[Dict[str, Any]], title: str = "Letzte Memos") -> str:
-        """Format memos into a readable message."""
-        if not memos:
-            return f"*{title}*\n\n{StatusEmojis.INFO} Keine Memos gefunden."
-        
-        message_parts = [f"*{title}*\n"]
-        
-        for i, memo in enumerate(memos, 1):
-            status = memo.get('status', 'Unbekannt')
-            aufgabe = memo.get('aufgabe', 'Unbekannte Aufgabe')
-            due_date = memo.get('faelligkeitsdatum')
-            
-            # Status emoji
-            status_emoji = {
-                'Nicht begonnen': '⚪',
-                'In Arbeit': '🟡', 
-                'Erledigt': '🟢'
-            }.get(status, '⚪')
-            
-            # Due date formatting
-            due_str = ""
-            if due_date:
-                if isinstance(due_date, str):
-                    due_str = f" | Fällig: {due_date}"
-                elif isinstance(due_date, datetime):
-                    due_str = f" | Fällig: {due_date.strftime('%d.%m.%Y')}"
-            
-            message_parts.append(f"{i}. {status_emoji} {aufgabe}{due_str}")
-        
-        return "\n".join(message_parts)
 
 
 class KeyboardBuilder:
@@ -148,20 +117,6 @@ class KeyboardBuilder:
         ]
         return InlineKeyboardMarkup(keyboard)
     
-    @staticmethod
-    def create_partner_relevance_keyboard(user_id: int) -> InlineKeyboardMarkup:
-        """Create partner relevance selection keyboard."""
-        from src.constants import CallbackData
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Ja, für Partner relevant", 
-                                   callback_data=f"{CallbackData.PARTNER_RELEVANT_YES}_{user_id}"),
-                InlineKeyboardButton("❌ Nein, nur privat", 
-                                   callback_data=f"{CallbackData.PARTNER_RELEVANT_NO}_{user_id}")
-            ]
-        ]
-        return InlineKeyboardMarkup(keyboard)
     
     @staticmethod
     def create_back_to_menu_keyboard() -> InlineKeyboardMarkup:
@@ -170,37 +125,3 @@ class KeyboardBuilder:
             [InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="main_menu")]
         ]
         return InlineKeyboardMarkup(keyboard)
-
-
-class DateTimeHelpers:
-    """Helper functions for date and time operations."""
-    
-    @staticmethod
-    def format_relative_date(target_date: date) -> str:
-        """Format date relative to today (heute, morgen, etc.)."""
-        today = date.today()
-        diff = (target_date - today).days
-        
-        if diff == 0:
-            return "heute"
-        elif diff == 1:
-            return "morgen"
-        elif diff == 2:
-            return "übermorgen"
-        elif diff == -1:
-            return "gestern"
-        elif diff > 0 and diff <= 7:
-            return f"in {diff} Tagen"
-        elif diff < 0 and diff >= -7:
-            return f"vor {abs(diff)} Tagen"
-        else:
-            return target_date.strftime("%d.%m.%Y")
-    
-    @staticmethod
-    def is_business_hours(dt: datetime) -> bool:
-        """Check if datetime falls within business hours (8-18, Mon-Fri)."""
-        # Monday is 0, Sunday is 6
-        if dt.weekday() >= 5:  # Saturday or Sunday
-            return False
-        
-        return 8 <= dt.hour < 18

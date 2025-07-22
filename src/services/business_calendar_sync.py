@@ -485,13 +485,6 @@ class BusinessCalendarSyncManager:
         for sync in self.user_syncs.values():
             sync.stop_sync()
         logger.info("Stopped all business calendar syncs")
-    
-    def get_all_stats(self) -> Dict[int, Dict]:
-        """Get stats for all user syncs."""
-        return {
-            user_id: sync.get_sync_stats() 
-            for user_id, sync in self.user_syncs.items()
-        }
 
 
 # Factory function for creating sync manager from environment

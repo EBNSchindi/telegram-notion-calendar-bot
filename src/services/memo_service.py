@@ -4,6 +4,7 @@ from notion_client import Client
 from notion_client.errors import APIResponseError
 from src.models.memo import Memo
 from config.user_config import UserConfig
+from src.utils.error_handler import BotError, ErrorType, ErrorSeverity, handle_bot_error
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,11 @@ class MemoService:
             memo_database_id: Notion memo database ID
         """
         if not notion_api_key or not memo_database_id:
-            raise ValueError("notion_api_key and memo_database_id are required")
+            raise BotError(
+                "notion_api_key and memo_database_id are required",
+                ErrorType.VALIDATION,
+                ErrorSeverity.HIGH
+            )
         
         self.client = Client(auth=notion_api_key)
         self.database_id = memo_database_id
@@ -29,13 +34,19 @@ class MemoService:
     def from_user_config(cls, user_config: UserConfig) -> 'MemoService':
         """Create MemoService from UserConfig."""
         if not user_config.memo_database_id:
-            raise ValueError("User config missing memo_database_id")
+            raise BotError(
+                "User config missing memo_database_id",
+                ErrorType.VALIDATION,
+                ErrorSeverity.HIGH,
+                user_message="📝 Memo-Datenbank ist nicht konfiguriert. Bitte wende dich an den Administrator."
+            )
         
         return cls(
             notion_api_key=user_config.notion_api_key,
             memo_database_id=user_config.memo_database_id
         )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
     async def create_memo(self, memo: Memo) -> str:
         """
         Create a new memo in Notion database.
@@ -47,7 +58,7 @@ class MemoService:
             str: Notion page ID of created memo
             
         Raises:
-            APIResponseError: If Notion API request fails
+            BotError: If Notion API request fails
         """
         try:
             properties = memo.to_notion_properties('Europe/Berlin')
@@ -64,8 +75,14 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to create memo in Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to create memo in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Erstellen des Memos in Notion. Bitte versuche es erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
     async def get_recent_memos(self, limit: int = 10) -> List[Memo]:
         """
         Get recent memos from Notion database, sorted by creation date (newest first).
@@ -102,8 +119,14 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to retrieve memos from Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to retrieve memos from Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Laden der Memos aus Notion. Bitte versuche es später erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
     async def get_memos_by_status(self, status: str, limit: int = 20) -> List[Memo]:
         """
         Get memos filtered by status.
@@ -147,8 +170,14 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to retrieve memos by status from Notion: {e}")
-            raise
+            raise BotError(
+                f"Failed to retrieve memos by status from Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Filtern der Memos. Bitte versuche es später erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
     async def update_memo(self, page_id: str, memo: Memo) -> bool:
         """
         Update an existing memo in Notion.
@@ -173,8 +202,14 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to update memo in Notion: {e}")
-            return False
+            raise BotError(
+                f"Failed to update memo in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Aktualisieren des Memos. Bitte versuche es erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
     async def update_memo_status(self, page_id: str, status: str) -> bool:
         """
         Update only the status of a memo.
@@ -205,8 +240,14 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to update memo status in Notion: {e}")
-            return False
+            raise BotError(
+                f"Failed to update memo status in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Aktualisieren des Memo-Status. Bitte versuche es erneut."
+            )
     
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.HIGH)
     async def delete_memo(self, page_id: str) -> bool:
         """
         Archive (delete) a memo in Notion.
@@ -228,7 +269,12 @@ class MemoService:
             
         except APIResponseError as e:
             logger.error(f"Failed to archive memo in Notion: {e}")
-            return False
+            raise BotError(
+                f"Failed to archive memo in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.HIGH,
+                user_message="📝 Fehler beim Löschen des Memos. Bitte versuche es erneut."
+            )
     
     async def test_connection(self) -> bool:
         """
@@ -243,4 +289,7 @@ class MemoService:
             return True
         except APIResponseError as e:
             logger.error(f"Failed to connect to memo database: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error testing memo database connection: {e}")
             return False
