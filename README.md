@@ -25,6 +25,7 @@ Eine professionelle, refactorisierte Telegram-Bot-Lösung für intelligente Kale
 ### 🤖 **AI-Powered Features**
 - **GPT-4o-mini Integration**: Natürliche Sprachverarbeitung für Termine und Memos
 - **Smart Extraction**: Automatische Extraktion von Terminen und Aufgaben aus beliebigen Texten  
+- **Vollständiger Kontexterhalt**: "Feierabendbier mit Peter" → Titel und Beschreibung behalten alle Details
 - **Intelligente Memo-Verwaltung**: KI-gestützte Aufgabenerstellung mit deutschen Feldnamen
 - **Partner-Relevanz-Abfrage**: Interaktive Buttons für gemeinsam relevante Termine
 - **Fallback-Modi**: Robust bei AI-Service-Ausfällen
@@ -37,7 +38,7 @@ Eine professionelle, refactorisierte Telegram-Bot-Lösung für intelligente Kale
 - **Kategorisierung**: Bereich und Projekt als Multi-Select-Felder
 - **Integration**: Nahtlos im vereinfachten 2x2+1 Hauptmenü
 
-### 🎛 **Vereinfachtes Hauptmenü**
+### 🎛 **Vereinfachtes Hauptmenü mit Navigation**
 ```
 📊 Datenbank-Status
 🔒 Private Datenbank: ✅
@@ -54,10 +55,11 @@ Eine professionelle, refactorisierte Telegram-Bot-Lösung für intelligente Kale
 └───────────────────────────────────────────┘
 ```
 
-**Datenbank-Status-Anzeige:**
+**Features:**
 - ✅ Grün = Verbindung erfolgreich
 - ❌ Rot = Verbindungsfehler
-- "Nicht konfiguriert" = Datenbank nicht eingerichtet
+- 🔙 "Zurück zum Hauptmenü" Button nach jeder Aktion
+- 📝 Vollständige Terminanzeige mit Beschreibung und Ort
 
 ### 👥 **Multi-User & Database Support**
 - **Private Datenbank**: Persönliche Termine und Memos pro Nutzer

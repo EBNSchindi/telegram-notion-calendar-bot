@@ -52,13 +52,19 @@ class MemoHandler:
             logger.warning(f"Invalid timezone '{timezone_str}', falling back to Europe/Berlin: {e}")
             self.timezone = pytz.timezone('Europe/Berlin')
     
+    def get_back_to_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Get a keyboard with only the 'Back to Menu' button."""
+        keyboard = [[InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="back_to_menu")]]
+        return InlineKeyboardMarkup(keyboard)
+    
     @rate_limit(max_requests=AI_RATE_LIMIT_REQUESTS, time_window=AI_RATE_LIMIT_WINDOW)
     async def show_recent_memos(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the most recent memos."""
         if not self.memo_service:
             await update.effective_message.reply_text(
                 "❌ Memo-Datenbank nicht konfiguriert. Bitte wende dich an den Administrator.",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=self.get_back_to_menu_keyboard()
             )
             return
         
@@ -120,7 +126,7 @@ class MemoHandler:
             if update.callback_query:
                 await update.callback_query.edit_message_text(text=error_message)
             else:
-                await update.effective_message.reply_text(text=error_message)
+                await update.effective_message.reply_text(text=error_message, reply_markup=self.get_back_to_menu_keyboard())
     
     async def prompt_for_new_memo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Prompt user to enter a new memo."""
@@ -163,7 +169,8 @@ class MemoHandler:
         """Process a memo message using AI extraction."""
         if not self.memo_service:
             await update.effective_message.reply_text(
-                "❌ Memo-Datenbank nicht konfiguriert."
+                "❌ Memo-Datenbank nicht konfiguriert.",
+                reply_markup=self.get_back_to_menu_keyboard()
             )
             return
         
