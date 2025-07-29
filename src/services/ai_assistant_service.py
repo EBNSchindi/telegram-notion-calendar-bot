@@ -103,15 +103,19 @@ Extract and return a JSON object with the following structure:
 
 CRITICAL TITLE EXTRACTION RULES:
 1. Create concise, meaningful titles that capture the essence of the appointment
-2. Transform activities into proper appointment titles:
+2. ALWAYS include WHO the appointment is with in the title if mentioned:
+   - "Feierabendbier mit Peter" → "Feierabendbier mit Peter" (keep "mit Peter"!)
+   - "Mittagessen mit Anna" → "Mittagessen mit Anna"
+   - "Meeting mit Team" → "Team Meeting"
+   - "Kaffee mit Sarah" → "Kaffee mit Sarah"
+3. Transform activities but PRESERVE person/context:
    - "Mama im Krankenhaus besuchen" → "Krankenhausbesuch Mama"
    - "zum Arzt gehen" → "Arzttermin"
-   - "Meeting mit Team" → "Team Meeting"
    - "Einkaufen gehen" → "Einkauf"
    - "Oma besuchen" → "Besuch bei Oma"
-3. Keep titles short but descriptive (max 30 characters)
-4. Use German noun compounds when appropriate
-5. Include the main person/place/activity in the title
+4. Keep titles descriptive but concise (max 50 characters)
+5. Use German noun compounds when appropriate
+6. NEVER remove person names or "mit [Person]" from the title
 
 DATE/TIME EXTRACTION RULES:
 1. For relative dates like "morgen" (tomorrow), "übermorgen" (day after tomorrow), "nächste Woche" (next week), calculate the actual date
@@ -121,10 +125,14 @@ DATE/TIME EXTRACTION RULES:
 5. "heute" = today, "morgen" = tomorrow, "übermorgen" = day after tomorrow
 
 CONTEXT EXTRACTION:
-1. Extract ALL relevant context from the input
-2. If location is mentioned, include it (hospital, office, restaurant, etc.)
-3. If reason/purpose is mentioned, include it in description
-4. If person is mentioned, include in title or description appropriately
+1. Extract ALL relevant context from the input - NOTHING should be lost!
+2. If location is mentioned, include it in the location field
+3. If a person is mentioned:
+   - Include them in the title (e.g., "Lunch mit Peter", "Meeting mit Sarah")
+   - Also add details to description if needed
+4. If reason/purpose is mentioned, include it in description
+5. Put any additional context that doesn't fit elsewhere into the description
+6. IMPORTANT: The description field should capture ALL context not in the title/location
 
 CONFIDENCE RULES:
 1. High confidence (0.8-1.0): Clear time/date + activity
@@ -137,6 +145,9 @@ Examples:
 - "heute 16 Uhr Mama im Krankenhaus besuchen" → title: "Krankenhausbesuch Mama", location: "Krankenhaus", date: today
 - "Nächsten Montag Meeting mit dem Team im Büro" → title: "Team Meeting", location: "Büro", date: next Monday
 - "Arzttermin am 25.3. um 10:30 wegen Vorsorge" → title: "Arzttermin", description: "Vorsorgeuntersuchung", date: "2025-03-25", time: "10:30"
+- "Feierabendbier mit Peter" → title: "Feierabendbier mit Peter", description: "Treffen mit Peter", confidence: 0.85
+- "Kaffee trinken mit Sarah im Café Central" → title: "Kaffee mit Sarah", location: "Café Central", confidence: 0.9
+- "Abendessen mit den Eltern bei Mama" → title: "Abendessen mit Eltern", location: "bei Mama", confidence: 0.9
 
 Return ONLY the JSON object, no additional text."""
 
@@ -300,6 +311,13 @@ Return ONLY the JSON object, no additional text."""
             appointment_data['description'] = appointment_data['description'].strip()
             if len(appointment_data['description']) > 500:
                 appointment_data['description'] = appointment_data['description'][:497] + '...'
+        else:
+            # If no description but title is long, consider adding context to description
+            if len(appointment_data.get('title', '')) > 30 and ' mit ' in appointment_data.get('title', ''):
+                # Extract context after "mit" for description if not already there
+                title_parts = appointment_data['title'].split(' mit ', 1)
+                if len(title_parts) > 1 and not appointment_data.get('description'):
+                    appointment_data['description'] = f"Treffen mit {title_parts[1]}"
         
         if appointment_data.get('location'):
             appointment_data['location'] = appointment_data['location'].strip()

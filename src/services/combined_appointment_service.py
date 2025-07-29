@@ -297,8 +297,13 @@ class CombinedAppointmentService:
             
             message_parts.append(f"{source_icon} {time_str} - *{apt.title}*")
             
+            # Add description if present
             if apt.description:
-                message_parts.append(f"   _{apt.description}_")
+                message_parts.append(f"   📝 _{apt.description}_")
+            
+            # Add location if present
+            if apt.location:
+                message_parts.append(f"   📍 {apt.location}")
         
         return "\n".join(message_parts)
     

@@ -61,6 +61,11 @@ class EnhancedAppointmentHandler:
             logger.warning(f"Invalid timezone '{timezone_str}', falling back to Europe/Berlin: {e}")
             self.timezone = pytz.timezone('Europe/Berlin')
     
+    def get_back_to_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Get a keyboard with only the 'Back to Menu' button."""
+        keyboard = [[InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="back_to_menu")]]
+        return InlineKeyboardMarkup(keyboard)
+    
     @rate_limit(max_requests=DEFAULT_RATE_LIMIT_REQUESTS, time_window=DEFAULT_RATE_LIMIT_WINDOW)
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the main menu with inline buttons."""
@@ -192,6 +197,8 @@ class EnhancedAppointmentHandler:
                     if apt.location:
                         message += f" (📍 {apt.location})"
                     message += "\n"
+                    if apt.description:
+                        message += f"   📝 _{apt.description}_\n"
                 message += "\n"
             else:
                 message += f"*Heute ({today.strftime('%d.%m.%Y')}):*\nKeine Termine! 🎉\n\n"
@@ -207,6 +214,8 @@ class EnhancedAppointmentHandler:
                     if apt.location:
                         message += f" (📍 {apt.location})"
                     message += "\n"
+                    if apt.description:
+                        message += f"   📝 _{apt.description}_\n"
             else:
                 message += f"*Morgen ({tomorrow.strftime('%d.%m.%Y')}):*\nKeine Termine! 🎉"
             
@@ -214,8 +223,7 @@ class EnhancedAppointmentHandler:
                 message += "\nPerfekt für eine entspannte Zeit! 🌟"
             
             # Add back button
-            keyboard = [[InlineKeyboardButton("🔙 Zurück zum Menü", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = self.get_back_to_menu_keyboard()
             
             await update.callback_query.edit_message_text(
                 text=message,
@@ -240,8 +248,7 @@ class EnhancedAppointmentHandler:
             message = self.combined_service.format_appointments_for_telegram(appointments, title)
             
             # Add back button
-            keyboard = [[InlineKeyboardButton("🔙 Zurück zum Menü", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = self.get_back_to_menu_keyboard()
             
             await update.callback_query.edit_message_text(
                 text=message,
@@ -266,8 +273,7 @@ class EnhancedAppointmentHandler:
             message = self.combined_service.format_appointments_for_telegram(appointments, title)
             
             # Add back button
-            keyboard = [[InlineKeyboardButton("🔙 Zurück zum Menü", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = self.get_back_to_menu_keyboard()
             
             await update.callback_query.edit_message_text(
                 text=message,
@@ -297,8 +303,7 @@ class EnhancedAppointmentHandler:
                 message += "\n\n_Nur die nächsten 10 Termine werden angezeigt._"
             
             # Add back button
-            keyboard = [[InlineKeyboardButton("🔙 Zurück zum Menü", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup = self.get_back_to_menu_keyboard()
             
             await update.callback_query.edit_message_text(
                 text=message,
@@ -493,7 +498,8 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             formatted_appointment = appointment.format_for_telegram(timezone_str)
             await update.message.reply_text(
                 f"✅ Termin erfolgreich erstellt!\n\n{formatted_appointment}",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=self.get_back_to_menu_keyboard()
             )
             
             logger.info(f"Created appointment: {title} at {date_time}")
@@ -536,12 +542,13 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             title = f"Termine für heute ({today.strftime('%d.%m.%Y')})"
             
             message = self.combined_service.format_appointments_for_telegram(appointments, title)
-            await update.message.reply_text(message, parse_mode='Markdown')
+            await update.message.reply_text(message, parse_mode='Markdown', reply_markup=self.get_back_to_menu_keyboard())
             
         except Exception as e:
             logger.error(f"Failed to get today's appointments: {e}")
             await update.message.reply_text(
-                "❌ Fehler beim Abrufen der heutigen Termine. Bitte versuche es erneut."
+                "❌ Fehler beim Abrufen der heutigen Termine. Bitte versuche es erneut.",
+                reply_markup=self.get_back_to_menu_keyboard()
             )
     
     @rate_limit(max_requests=15, time_window=60)  # 15 queries per minute
@@ -554,12 +561,13 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             title = f"Termine für morgen ({tomorrow.strftime('%d.%m.%Y')})"
             
             message = self.combined_service.format_appointments_for_telegram(appointments, title)
-            await update.message.reply_text(message, parse_mode='Markdown')
+            await update.message.reply_text(message, parse_mode='Markdown', reply_markup=self.get_back_to_menu_keyboard())
             
         except Exception as e:
             logger.error(f"Failed to get tomorrow's appointments: {e}")
             await update.message.reply_text(
-                "❌ Fehler beim Abrufen der morgigen Termine. Bitte versuche es erneut."
+                "❌ Fehler beim Abrufen der morgigen Termine. Bitte versuche es erneut.",
+                reply_markup=self.get_back_to_menu_keyboard()
             )
     
     @rate_limit(max_requests=15, time_window=60)  # 15 queries per minute
@@ -583,7 +591,8 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
         except Exception as e:
             logger.error(f"Failed to list appointments: {e}")
             await update.message.reply_text(
-                "❌ Fehler beim Abrufen der Termine. Bitte versuche es erneut."
+                "❌ Fehler beim Abrufen der Termine. Bitte versuche es erneut.",
+                reply_markup=self.get_back_to_menu_keyboard()
             )
     
     def _parse_add_command(self, args: List[str]) -> tuple[datetime, str, str]:
@@ -744,12 +753,14 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             )
             
             if not appointment_data:
-                await processing_msg.edit_text(
+                await processing_msg.delete()
+                await update.message.reply_text(
                     "❌ Ich konnte leider keine Termininformationen aus deiner Nachricht extrahieren.\n\n"
                     "Bitte versuche es mit einem klareren Format:\n"
                     "• `morgen 14:00 Zahnarzttermin`\n"
                     "• `25.12.2024 18:00 Weihnachtsfeier`\n"
-                    "• `heute 16 Uhr Meeting mit Team`"
+                    "• `heute 16 Uhr Meeting mit Team`",
+                    reply_markup=self.get_back_to_menu_keyboard()
                 )
                 return
             
@@ -797,10 +808,12 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             
         except Exception as e:
             logger.error(f"Error processing AI appointment: {e}", exc_info=True)
-            await processing_msg.edit_text(
+            await processing_msg.delete()
+            await update.message.reply_text(
                 f"❌ Es ist ein Fehler bei der Verarbeitung aufgetreten.\n"
                 f"Fehler: {str(e)[:100]}...\n\n"
-                f"Bitte versuche es später erneut oder nutze das manuelle Format."
+                f"Bitte versuche es später erneut oder nutze das manuelle Format.",
+                reply_markup=self.get_back_to_menu_keyboard()
             )
     
     async def handle_partner_relevance_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
