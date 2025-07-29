@@ -60,6 +60,9 @@ services:
       # Telegram Configuration
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       
+      # AI Configuration (Optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
       # Email Sync Configuration
       - EMAIL_SYNC_ENABLED=${EMAIL_SYNC_ENABLED:-false}
       - EMAIL_ADDRESS=${EMAIL_ADDRESS}
