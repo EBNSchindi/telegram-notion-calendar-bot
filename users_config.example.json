@@ -5,11 +5,13 @@
     {
       "telegram_user_id": 123456789,
       "telegram_username": "user1",
-      "notion_api_key": "secret_xxx_your_unified_notion_api_key_1",
+      "notion_api_key": "secret_xxx_your_private_notion_api_key_1",
       "notion_database_id": "your_private_database_id_1",
       "shared_notion_database_id": "your_shared_database_id",
       "business_notion_database_id": "1d71778a50cc804e8796dab3dc69eca2",
       "memo_database_id": "your_memo_database_id_1",
+      "teamspace_owner_api_key": "secret_xxx_teamspace_owner_api_key",
+      "is_owner": false,
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "08:00",
@@ -41,11 +43,13 @@
     {
       "telegram_user_id": 987654321,
       "telegram_username": "user2", 
-      "notion_api_key": "secret_xxx_your_unified_notion_api_key_2",
+      "notion_api_key": "secret_xxx_your_private_notion_api_key_2",
       "notion_database_id": "your_private_database_id_2",
       "shared_notion_database_id": "your_shared_database_id",
       "business_notion_database_id": null,
       "memo_database_id": "your_memo_database_id_2",
+      "teamspace_owner_api_key": null,
+      "is_owner": true,
       "timezone": "Europe/Berlin",
       "language": "de",
       "reminder_time": "09:00",
@@ -54,7 +58,9 @@
   ],
   "_setup_instructions": {
     "step_1": "Telegram User ID ermitteln - wird beim ersten /start angezeigt",
-    "step_2": "Notion Integration erstellen und API Key kopieren (nur EINER pro User)",
+    "step_2": "Notion Integration erstellen und API Key kopieren",
+    "step_2a": "Eigener API Key: Für private/memo Datenbanken",
+    "step_2b": "Teamspace Owner API Key: NUR für Shared Database (wenn in Teamspace)",
     "step_3": "Notion Datenbanken erstellen:",
     "step_3a": "Private DB: Name, Datum, Beschreibung, Ort, Tags, PartnerRelevant, OutlookID, Organizer",
     "step_3b": "Memo DB: Aufgabe, Status, Fälligkeitsdatum, Bereich, Projekt, Notizen",
@@ -62,6 +68,29 @@
     "step_4": "Gmail App-Passwort für Email-Integration erstellen",
     "step_5": "Umgebungsvariablen in .env konfigurieren",
     "step_6": "Bot starten mit: python src/bot.py"
+  },
+  "_teamspace_configuration": {
+    "description": "Spezielle Konfiguration für Notion Teamspace",
+    "teamspace_owner_api_key": {
+      "purpose": "API Key des Teamspace-Besitzers für Shared Database",
+      "required_for": "Nicht-Besitzer, die auf Shared DB zugreifen müssen",
+      "value": "secret_xxx_teamspace_owner_api_key"
+    },
+    "is_owner": {
+      "purpose": "Markiert den Teamspace-Besitzer",
+      "true": "User ist Teamspace-Besitzer, nutzt eigenen API Key für alles",
+      "false": "User nutzt Owner API Key NUR für Shared DB"
+    },
+    "example_owner": {
+      "is_owner": true,
+      "teamspace_owner_api_key": null,
+      "_comment": "Besitzer braucht keinen separaten Owner API Key"
+    },
+    "example_member": {
+      "is_owner": false,
+      "teamspace_owner_api_key": "secret_xxx_teamspace_owner_api_key",
+      "_comment": "Mitglieder nutzen Owner Key für Shared DB"
+    }
   },
   "_database_requirements": {
     "private_database": {

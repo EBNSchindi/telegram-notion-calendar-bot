@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from src.models.appointment import Appointment
 from src.services.notion_service import NotionService
 from config.user_config import UserConfig, UserConfigManager
+from src.utils.duplicate_checker import DuplicateChecker
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,30 @@ class AppointmentSource:
 
 
 class CombinedAppointmentService:
-    """Service that combines appointments from private and shared databases."""
+    """Service that combines appointments from private and shared databases.
+    
+    This service provides a unified interface for managing appointments across
+    multiple Notion databases (private, shared, and business). It handles:
+    - Creating appointments with AI extraction
+    - Retrieving appointments from all databases
+    - Duplicate detection and prevention
+    - Partner sharing coordination
+    
+    Attributes:
+        user_config: User configuration with API keys and database IDs
+        private_service: Service for private database operations
+        shared_service: Service for shared database operations (optional)
+        ai_service: AI service for natural language processing
+        duplicate_checker: Service for detecting duplicate appointments
+    """
     
     def __init__(self, user_config: UserConfig, user_config_manager: Optional[UserConfigManager] = None):
+        """Initialize the combined appointment service.
+        
+        Args:
+            user_config: User configuration containing API keys and database IDs
+            user_config_manager: Optional manager for accessing shared configurations
+        """
         self.user_config = user_config
         self.user_config_manager = user_config_manager
         
@@ -47,8 +69,15 @@ class CombinedAppointmentService:
         # Only create shared service if configured
         self.shared_service = None
         if user_config.shared_notion_database_id:
+            # Use appropriate API key for shared database
+            if user_config_manager:
+                shared_api_key = user_config_manager.get_shared_database_api_key(user_config)
+            else:
+                # Fallback if no manager provided
+                shared_api_key = user_config.teamspace_owner_api_key or user_config.notion_api_key
+                
             self.shared_service = NotionService(
-                notion_api_key=user_config.notion_api_key,
+                notion_api_key=shared_api_key,
                 database_id=user_config.shared_notion_database_id
             )
     
@@ -63,13 +92,30 @@ class CombinedAppointmentService:
             List of AppointmentSource objects sorted by date
         """
         all_appointments = []
+        seen_ids = set()  # Track seen appointments by ID to avoid duplicates
+        seen_keys = set()  # Track seen appointments by content key
         
         # Get private appointments
         try:
             private_appointments = await self.private_service.get_appointments(limit=limit)
             for apt in private_appointments:
+                # Check for duplicates by ID
+                if apt.notion_page_id and apt.notion_page_id in seen_ids:
+                    logger.debug(f"Skipping duplicate private appointment by ID: {apt.notion_page_id}")
+                    continue
+                    
+                # Check for duplicates by content using DuplicateChecker
+                content_key = DuplicateChecker.create_appointment_key(apt)
+                if content_key in seen_keys:
+                    logger.debug(f"Skipping duplicate private appointment by content: {apt.title}")
+                    continue
+                
                 all_appointments.append(AppointmentSource(apt, is_shared=False))
-            logger.info(f"Retrieved {len(private_appointments)} private appointments")
+                if apt.notion_page_id:
+                    seen_ids.add(apt.notion_page_id)
+                seen_keys.add(content_key)
+                
+            logger.info(f"Retrieved {len(private_appointments)} private appointments, {len([a for a in all_appointments if not a.is_shared])} unique")
         except Exception as e:
             logger.error(f"Error retrieving private appointments: {e}")
         
@@ -78,13 +124,35 @@ class CombinedAppointmentService:
             try:
                 shared_appointments = await self.shared_service.get_appointments(limit=limit)
                 for apt in shared_appointments:
+                    # Check for duplicates by ID
+                    if apt.notion_page_id and apt.notion_page_id in seen_ids:
+                        logger.debug(f"Skipping duplicate shared appointment by ID: {apt.notion_page_id}")
+                        continue
+                        
+                    # Check for duplicates by content using DuplicateChecker
+                    content_key = DuplicateChecker.create_appointment_key(apt)
+                    if content_key in seen_keys:
+                        logger.debug(f"Skipping duplicate shared appointment by content: {apt.title}")
+                        continue
+                    
+                    # Additional check: Skip if this is a synced copy of a private appointment we already have
+                    if hasattr(apt, 'source_private_id') and apt.source_private_id in seen_ids:
+                        logger.debug(f"Skipping shared appointment that's a synced copy of private: {apt.title}")
+                        continue
+                    
                     all_appointments.append(AppointmentSource(apt, is_shared=True))
-                logger.info(f"Retrieved {len(shared_appointments)} shared appointments")
+                    if apt.notion_page_id:
+                        seen_ids.add(apt.notion_page_id)
+                    seen_keys.add(content_key)
+                    
+                logger.info(f"Retrieved {len(shared_appointments)} shared appointments, {len([a for a in all_appointments if a.is_shared])} unique")
             except Exception as e:
                 logger.error(f"Error retrieving shared appointments: {e}")
         
         # Sort by date/time
         all_appointments.sort(key=lambda x: x.appointment.date)
+        
+        logger.info(f"Total unique appointments: {len(all_appointments)}")
         
         return all_appointments
     

@@ -16,6 +16,8 @@ AI_RATE_LIMIT_WINDOW = 60
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 MAX_APPOINTMENT_TITLE_LENGTH = 200
 MAX_MEMO_TITLE_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 2000
+MAX_LOCATION_LENGTH = 500
 
 # Pagination
 DEFAULT_APPOINTMENTS_LIMIT = 10
@@ -48,8 +50,44 @@ class StatusEmojis:
     WARNING = "⚠️"
     INFO = "ℹ️"
     PENDING = "⏳"
-    PRIVATE = "👤"
-    SHARED = "🌐"
+
+# Bot Messages
+SUCCESS_REMINDER_ENABLED = "✅ Erinnerungen aktiviert"
+SUCCESS_REMINDER_DISABLED = "✅ Erinnerungen deaktiviert"
+ERROR_REMINDER_SERVICE_NOT_ACTIVE = "❌ Erinnerungsdienst nicht aktiv"
+ERROR_TEST_REMINDER_FAILED = "❌ Test-Erinnerung fehlgeschlagen"
+ERROR_CREATE_PREVIEW_FAILED = "❌ Vorschau konnte nicht erstellt werden"
+ERROR_UNKNOWN_COMMAND = "❌ Unbekannter Befehl"
+STATUS_SENDING_TEST_REMINDER = "⏳ Sende Test-Erinnerung..."
+WELCOME_MESSAGE = "Willkommen beim Telegram Notion Calendar Bot!"
+WELCOME_CALENDAR_BOT = "📅 Telegram Notion Calendar Bot"
+DATABASE_STATUS_HEADER = "📊 Datenbank-Status"
+DATABASE_PRIVATE = "🔒 Private Datenbank"
+DATABASE_SHARED = "👥 Geteilte Datenbank"
+MENU_CHOOSE_ACTION = "Wähle eine Aktion:"
+STATUS_ACTIVE = "✅ Aktiv"
+STATUS_INACTIVE = "❌ Inaktiv"
+REMINDER_SETTINGS_HEADER = "⚙️ Erinnerungs-Einstellungen"
+REMINDER_STATUS = "Status"
+REMINDER_TIME = "Zeit"
+REMINDER_SHARED_DB = "Shared DB"
+REMINDER_COMMANDS_HEADER = "Verfügbare Befehle"
+REMINDER_COMMAND_ON = "/reminder on"
+REMINDER_COMMAND_OFF = "/reminder off"
+REMINDER_COMMAND_TIME = "/reminder time HH:MM"
+REMINDER_COMMAND_TEST = "/reminder test"
+REMINDER_COMMAND_PREVIEW = "/reminder preview"
+ERROR_NOT_CONFIGURED = "❌ Nicht konfiguriert"
+ERROR_NOT_CONFIGURED_FULL = "❌ Du bist noch nicht konfiguriert. Bitte kontaktiere den Administrator."
+STATUS_FETCHING_APPOINTMENTS = "⏳ Hole Termine..."
+COMMAND_DESCRIPTIONS = {
+    "today": "Heutige Termine",
+    "tomorrow": "Morgige Termine",
+    "add": "Termin hinzufügen",
+    "list": "Alle Termine",
+    "reminder": "Erinnerungen",
+    "help": "Hilfe"
+}
 
 # Menu Buttons
 class MenuButtons:
@@ -119,3 +157,27 @@ PARTNER_SYNC_INTERVAL_HOURS = 2
 
 # Debug
 MAX_DEBUG_OUTPUT_LENGTH = 30000
+
+# Cache Settings
+CACHE_TTL_SHORT = 300  # 5 minutes
+CACHE_TTL_MEDIUM = 3600  # 1 hour  
+CACHE_TTL_LONG = 86400  # 24 hours
+
+# Confidence Thresholds
+CONFIDENCE_HIGH = 0.8
+CONFIDENCE_MEDIUM = 0.6
+CONFIDENCE_LOW = 0.4
+
+# System Limits
+MAX_CONCURRENT_REQUESTS = 10
+MAX_QUEUE_SIZE = 100
+QUEUE_TIMEOUT = 60  # seconds
+
+# Duplicate Detection
+DUPLICATE_TIME_WINDOW = 300  # 5 minutes
+DUPLICATE_SIMILARITY_THRESHOLD = 0.9
+
+# Logging
+LOG_ROTATION_SIZE = 10485760  # 10 MB
+LOG_BACKUP_COUNT = 5
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

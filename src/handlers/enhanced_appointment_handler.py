@@ -25,6 +25,20 @@ from src.constants import (
     MenuButtons,
     CallbackData
 )
+from src.constants import (
+    DATABASE_STATUS_HEADER,
+    DATABASE_PRIVATE,
+    DATABASE_SHARED,
+    MENU_CHOOSE_ACTION,
+    WELCOME_MESSAGE,
+    WELCOME_CALENDAR_BOT,
+    ERROR_NOT_CONFIGURED_FULL
+)
+
+# Define missing constants locally
+ERROR_INVALID_INPUT = "❌ Ungültige Eingabe. Bitte versuche es erneut."
+AI_ANALYZING_APPOINTMENT = "🤖 KI analysiert deinen Termin..."
+STATUS_NOT_CONFIGURED = "❌ Nicht konfiguriert"
 
 logger = logging.getLogger(__name__)
 
@@ -55,20 +69,36 @@ class EnhancedAppointmentHandler:
         # Test database connections
         private_ok, shared_ok = await self.combined_service.test_connections()
         
+        # Test memo database connection
+        memo_ok = False
+        if self.memo_handler.is_memo_service_available():
+            try:
+                memo_ok = await self.memo_handler.memo_service.test_connection()
+            except Exception as e:
+                logger.error(f"Memo database connection test failed: {e}")
+                memo_ok = False
+        
         # Create status message
         private_status = "✅" if private_ok else "❌"
         if shared_ok is None:
-            shared_status = "⚠️ Nicht konfiguriert"
+            shared_status = STATUS_NOT_CONFIGURED
         else:
             shared_status = "✅" if shared_ok else "❌"
         
+        # Memo status
+        if not self.memo_handler.is_memo_service_available():
+            memo_status = STATUS_NOT_CONFIGURED
+        else:
+            memo_status = "✅" if memo_ok else "❌"
+        
         status_text = (
-            f"Hallo {user.first_name}! 👋\n\n"
-            f"🗓 *Dein Kalender-Bot*\n\n"
-            f"*Datenbankstatus:*\n"
-            f"👤 Private Datenbank: {private_status}\n"
-            f"🌐 Gemeinsame Datenbank: {shared_status}\n\n"
-            f"*Wähle eine Aktion:*"
+            f"{WELCOME_MESSAGE}\n\n"
+            f"{WELCOME_CALENDAR_BOT}\n\n"
+            f"{DATABASE_STATUS_HEADER}\n"
+            f"{DATABASE_PRIVATE}: {private_status}\n"
+            f"{DATABASE_SHARED}: {shared_status}\n"
+            f"📝 Memo Datenbank: {memo_status}\n\n"
+            f"{MENU_CHOOSE_ACTION}"
         )
         
         # Create simplified inline keyboard (2x2 + 1)
@@ -103,7 +133,15 @@ class EnhancedAppointmentHandler:
             )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle inline keyboard callbacks."""
+        """Handle inline keyboard callbacks.
+        
+        Routes callback queries to appropriate handler methods based on the
+        callback data. Supports both new simplified menu and legacy menu items.
+        
+        Args:
+            update: Telegram update containing the callback query
+            context: Telegram context for the update
+        """
         query = update.callback_query
         await query.answer()
         
@@ -146,9 +184,11 @@ class EnhancedAppointmentHandler:
             # Today's appointments
             if today_appointments:
                 message += f"*Heute ({today.strftime('%d.%m.%Y')}):*\n"
-                for i, apt in enumerate(today_appointments, 1):
+                for i, apt_src in enumerate(today_appointments, 1):
+                    apt = apt_src.appointment
+                    source_icon = "🌐" if apt_src.is_shared else "👤"
                     local_date = apt.date.astimezone(self.timezone) if apt.date.tzinfo else self.timezone.localize(apt.date)
-                    message += f"{i}. 🕐 *{local_date.strftime('%H:%M')}* - {apt.title}"
+                    message += f"{i}. {source_icon} *{local_date.strftime('%H:%M')}* - {apt.title}"
                     if apt.location:
                         message += f" (📍 {apt.location})"
                     message += "\n"
@@ -159,9 +199,11 @@ class EnhancedAppointmentHandler:
             # Tomorrow's appointments
             if tomorrow_appointments:
                 message += f"*Morgen ({tomorrow.strftime('%d.%m.%Y')}):*\n"
-                for i, apt in enumerate(tomorrow_appointments, 1):
+                for i, apt_src in enumerate(tomorrow_appointments, 1):
+                    apt = apt_src.appointment
+                    source_icon = "🌐" if apt_src.is_shared else "👤"
                     local_date = apt.date.astimezone(self.timezone) if apt.date.tzinfo else self.timezone.localize(apt.date)
-                    message += f"{i}. 🕐 *{local_date.strftime('%H:%M')}* - {apt.title}"
+                    message += f"{i}. {source_icon} *{local_date.strftime('%H:%M')}* - {apt.title}"
                     if apt.location:
                         message += f" (📍 {apt.location})"
                     message += "\n"
@@ -400,7 +442,7 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
                 message_text=update.message.text or ""
             )
         except ValidationError as e:
-            await update.message.reply_text("❌ Ungültige Eingabe. Bitte versuche es erneut.")
+            await update.message.reply_text(ERROR_INVALID_INPUT)
             logger.warning(f"Invalid Telegram input from user {user_id}: {e}")
             return
         
@@ -687,12 +729,12 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
                 message_text=message_text
             )
         except ValidationError as e:
-            await update.message.reply_text("❌ Ungültige Eingabe. Bitte versuche es erneut.")
+            await update.message.reply_text(ERROR_INVALID_INPUT)
             logger.warning(f"Invalid input from user {user_id}: {e}")
             return
         
         # Show processing message
-        processing_msg = await update.message.reply_text("🤖 Analysiere deinen Termin...")
+        processing_msg = await update.message.reply_text(AI_ANALYZING_APPOINTMENT)
         
         try:
             # Extract appointment data using AI

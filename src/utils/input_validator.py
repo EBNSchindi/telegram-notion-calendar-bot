@@ -4,8 +4,7 @@ import html
 import logging
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
-from pydantic.error_wrappers import ValidationError
+from pydantic import BaseModel, Field, validator, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,20 @@ class SafeString(BaseModel):
     
     @validator('value')
     def sanitize_value(cls, v):
-        """Sanitize input string."""
+        """Sanitize input string for security.
+        
+        Removes dangerous characters and escapes HTML to prevent
+        injection attacks.
+        
+        Args:
+            v: Raw input value
+            
+        Returns:
+            Sanitized string value
+            
+        Raises:
+            ValueError: If input is not a string or too long
+        """
         if not isinstance(v, str):
             raise ValueError("Value must be a string")
         
@@ -39,7 +51,20 @@ class AppointmentTitle(BaseModel):
     
     @validator('title')
     def validate_title(cls, v):
-        """Validate appointment title."""
+        """Validate appointment title for safety and format.
+        
+        Ensures title is not empty, removes excessive whitespace,
+        and checks for suspicious patterns.
+        
+        Args:
+            v: Raw title string
+            
+        Returns:
+            Validated and cleaned title
+            
+        Raises:
+            ValueError: If title is empty or contains suspicious content
+        """
         if not v or not v.strip():
             raise ValueError("Title cannot be empty")
         
@@ -238,8 +263,7 @@ class InputValidator:
     
     @staticmethod
     def is_safe_command_arg(arg: str) -> bool:
-        """
-        Check if command argument is safe.
+        """Check if command argument is safe.
         
         Args:
             arg: Command argument

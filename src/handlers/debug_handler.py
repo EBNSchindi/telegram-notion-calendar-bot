@@ -6,6 +6,10 @@ from src.utils.robust_time_parser import RobustTimeParser
 from src.services.combined_appointment_service import CombinedAppointmentService
 from config.user_config import UserConfigManager
 from config.settings import Settings
+# Define debug-specific constants
+ERROR_PERMISSION_DENIED = "❌ Keine Berechtigung für diesen Befehl."
+ERROR_USER_CONFIG_NOT_AVAILABLE = "❌ Benutzerkonfiguration nicht verfügbar."
+STATUS_TESTING_NOTION = "🧪 Teste Notion-Verbindung..."
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,7 @@ class DebugHandler:
         """Test a time format input."""
         user_id = update.effective_user.id
         if not self._is_admin(user_id):
-            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            await update.message.reply_text(ERROR_PERMISSION_DENIED)
             return
             
         if not context.args:
@@ -90,7 +94,7 @@ class DebugHandler:
         """Show all supported time formats with examples."""
         user_id = update.effective_user.id
         if not self._is_admin(user_id):
-            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            await update.message.reply_text(ERROR_PERMISSION_DENIED)
             return
         formats_text = """
 📚 *Unterstützte Zeitformate*
@@ -132,7 +136,7 @@ class DebugHandler:
         """Validate a complete appointment input."""
         user_id = update.effective_user.id
         if not self._is_admin(user_id):
-            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            await update.message.reply_text(ERROR_PERMISSION_DENIED)
             return
             
         if len(context.args) < 3:
@@ -225,11 +229,11 @@ class DebugHandler:
         """Test Notion database connections for the user."""
         user_id = update.effective_user.id
         if not self._is_admin(user_id):
-            await update.message.reply_text("❌ Zugriff verweigert. Debug-Befehle sind nur für Administratoren verfügbar.")
+            await update.message.reply_text(ERROR_PERMISSION_DENIED)
             return
             
         if not self.user_config_manager:
-            await update.message.reply_text("❌ User Config Manager nicht verfügbar")
+            await update.message.reply_text(ERROR_USER_CONFIG_NOT_AVAILABLE)
             return
         user_config = self.user_config_manager.get_user_config(user_id)
         
@@ -240,7 +244,7 @@ class DebugHandler:
             )
             return
         
-        await update.message.reply_text("🔍 Teste Notion-Verbindungen...")
+        await update.message.reply_text(STATUS_TESTING_NOTION)
         
         try:
             # Create combined service

@@ -11,6 +11,14 @@ from src.services.email_processor import EmailProcessor, create_email_processor_
 from src.services.json_parser import BusinessEventParser, BusinessEvent
 from src.services.notion_service import NotionService
 from src.models.appointment import Appointment
+from src.constants import (
+    EMAIL_SYNC_INTERVAL,
+    BUSINESS_CALENDAR_LOOKBACK_DAYS,
+    EMAIL_CONNECTION_TIMEOUT
+)
+
+# Define missing constant
+RETRY_DELAY = 60  # seconds
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +164,7 @@ class BusinessCalendarSync:
             except Exception as e:
                 logger.error(f"Error in sync loop: {e}")
                 self.stats['errors'] += 1
-                await asyncio.sleep(60)  # Wait 1 minute before retrying
+                await asyncio.sleep(RETRY_DELAY * 60)  # Wait before retrying
     
     async def sync_business_calendars(self, is_initial: bool = False):
         """Main synchronization method."""

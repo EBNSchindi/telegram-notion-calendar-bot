@@ -16,6 +16,38 @@ from src.handlers.enhanced_appointment_handler import EnhancedAppointmentHandler
 from src.handlers.debug_handler import DebugHandler
 from src.services.enhanced_reminder_service import EnhancedReminderService
 from src.services.business_calendar_sync import create_sync_manager_from_env
+from src.constants import (
+    SUCCESS_REMINDER_ENABLED, SUCCESS_REMINDER_DISABLED,
+    ERROR_REMINDER_SERVICE_NOT_ACTIVE, ERROR_TEST_REMINDER_FAILED,
+    ERROR_CREATE_PREVIEW_FAILED, ERROR_UNKNOWN_COMMAND,
+    STATUS_SENDING_TEST_REMINDER, WELCOME_MESSAGE,
+    WELCOME_CALENDAR_BOT, DATABASE_STATUS_HEADER,
+    DATABASE_PRIVATE, DATABASE_SHARED,
+    MENU_CHOOSE_ACTION, STATUS_ACTIVE, STATUS_INACTIVE,
+    REMINDER_SETTINGS_HEADER, REMINDER_STATUS, REMINDER_TIME,
+    REMINDER_SHARED_DB, REMINDER_COMMANDS_HEADER,
+    REMINDER_COMMAND_ON, REMINDER_COMMAND_OFF, REMINDER_COMMAND_TIME,
+    REMINDER_COMMAND_TEST, REMINDER_COMMAND_PREVIEW
+)
+
+# Define missing constants locally
+CONFIG_NO_VALID_USERS = "❌ Keine gültigen Benutzer in der Konfiguration gefunden"
+SERVICE_REMINDER_STARTED = "✅ Erinnerungsdienst gestartet"
+SERVICE_PARTNER_SYNC_STARTED = "✅ Partner-Synchronisation gestartet"
+SERVICE_PARTNER_SYNC_DISABLED = "ℹ️ Partner-Synchronisation deaktiviert"
+SERVICE_PARTNER_SYNC_FAILED = "❌ Partner-Synchronisation fehlgeschlagen"
+BOT_COMMANDS_SET_SUCCESS = "✅ Bot-Befehle erfolgreich gesetzt"
+BOT_COMMANDS_SET_FAILED = "❌ Bot-Befehle konnten nicht gesetzt werden"
+HELP_HEADER = "❓ **Hilfe**"
+HELP_COMMANDS = "📋 **Verfügbare Befehle:**"
+HELP_DEBUG_COMMANDS = "🔧 **Debug-Befehle:**"
+HELP_DATABASE_INFO = "💾 **Datenbank-Info:**"
+HELP_TIME_FORMATS = "⏰ **Unterstützte Zeitformate:**"
+HELP_DATE_FORMATS = "📅 **Unterstützte Datumsformate:**"
+HELP_TIPS = "💡 **Tipps:**"
+from src.constants import PARTNER_SYNC_INTERVAL_HOURS
+PARTNER_SYNC_INTERVAL = PARTNER_SYNC_INTERVAL_HOURS * 3600  # Convert to seconds
+from src.constants import StatusEmojis, BOT_COMMANDS
 
 # Enable secure logging with data sanitization
 from utils.log_sanitizer import setup_secure_logging
@@ -27,7 +59,17 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedCalendarBot:
+    """Main bot class that orchestrates all functionality.
+    
+    This class manages:
+    - User authentication and configuration
+    - Handler routing and caching
+    - Service initialization (reminders, sync, etc.)
+    - Command registration and processing
+    """
+    
     def __init__(self):
+        """Initialize the bot with all required services and handlers."""
         self.settings = Settings()
         self.user_config_manager = UserConfigManager()
         self.application = None

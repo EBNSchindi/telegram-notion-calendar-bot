@@ -13,11 +13,13 @@ class UserConfig:
     """Configuration for a single user."""
     telegram_user_id: int
     telegram_username: str
-    notion_api_key: str  # Single API key for all databases
+    notion_api_key: str  # User's own API key for private/memo databases
     notion_database_id: str  # Private database (individual per user)
     shared_notion_database_id: str = None  # Shared database ID (same for all users)
     business_notion_database_id: str = None  # Business database ID (optional, individual)
     memo_database_id: str = None  # Memo database ID (individual per user)
+    teamspace_owner_api_key: str = None  # Owner API key for shared database in Teamspace
+    is_owner: bool = False  # Flag to identify if user is the Teamspace owner
     timezone: str = 'Europe/Berlin'
     language: str = 'de'
     reminder_time: str = '08:00'  # Time for daily reminders
@@ -48,6 +50,8 @@ class UserConfigManager:
                 telegram_username='default',
                 notion_api_key=os.getenv('NOTION_API_KEY', ''),
                 notion_database_id=os.getenv('NOTION_DATABASE_ID', ''),
+                teamspace_owner_api_key=os.getenv('TEAMSPACE_OWNER_API_KEY', ''),
+                is_owner=os.getenv('IS_TEAMSPACE_OWNER', 'false').lower() == 'true',
                 timezone=os.getenv('TIMEZONE', 'Europe/Berlin'),
                 language=os.getenv('LANGUAGE', 'de'),
                 reminder_time=os.getenv('REMINDER_TIME', '08:00'),
@@ -84,6 +88,8 @@ class UserConfigManager:
                         'shared_notion_database_id': user.shared_notion_database_id,
                         'business_notion_database_id': user.business_notion_database_id,
                         'memo_database_id': user.memo_database_id,
+                        'teamspace_owner_api_key': user.teamspace_owner_api_key,
+                        'is_owner': user.is_owner,
                         'timezone': user.timezone,
                         'language': user.language,
                         'reminder_time': user.reminder_time,
@@ -117,6 +123,8 @@ class UserConfigManager:
                 shared_notion_database_id=getattr(default, 'shared_notion_database_id', None),
                 business_notion_database_id=getattr(default, 'business_notion_database_id', None),
                 memo_database_id=getattr(default, 'memo_database_id', None),
+                teamspace_owner_api_key=getattr(default, 'teamspace_owner_api_key', None),
+                is_owner=getattr(default, 'is_owner', False),
                 timezone=getattr(default, 'timezone', 'Europe/Berlin'),
                 language=getattr(default, 'language', 'de'),
                 reminder_time=getattr(default, 'reminder_time', '08:00'),
@@ -235,3 +243,24 @@ class UserConfigManager:
             if user.reminder_enabled and user.reminder_time == current_time:
                 users.append(user)
         return users
+    
+    def get_shared_database_api_key(self, user_config: UserConfig) -> str:
+        """
+        Get the appropriate API key for accessing the shared database.
+        
+        For Teamspace shared databases:
+        - If user is the owner, use their own API key
+        - If user is not the owner, use the teamspace_owner_api_key
+        
+        Args:
+            user_config: User configuration
+            
+        Returns:
+            str: API key to use for shared database access
+        """
+        if user_config.is_owner or not user_config.teamspace_owner_api_key:
+            # Owner uses their own key, or fallback if no owner key configured
+            return user_config.notion_api_key
+        else:
+            # Non-owners use the teamspace owner's API key for shared DB
+            return user_config.teamspace_owner_api_key

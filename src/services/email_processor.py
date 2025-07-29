@@ -9,6 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Dict
 from dataclasses import dataclass
 from contextlib import contextmanager
+from src.constants import EMAIL_CONNECTION_TIMEOUT
+
+# Define missing constants
+MAX_RECONNECT_ATTEMPTS = 3
+API_REQUEST_TIMEOUT = 30
 
 logger = logging.getLogger(__name__)
 

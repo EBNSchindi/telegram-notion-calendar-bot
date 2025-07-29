@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Fixed database status display not showing green (✅) or red (❌) indicators
+- Fixed import errors from non-existent `src.constants.messages` and `src.constants.limits` modules
+- Fixed syntax error in `src/utils/input_validator.py` (unterminated triple-quoted string)
+
+### Added
+- Added memo database status to the main menu display
+- Database status now shows all three databases: Private, Shared, and Memo
+
+### Changed
+- Updated database status format to show emoji indicators directly after database names
+- Consolidated all constants imports to use the main `src.constants` module
+
 ## [1.0.0] - 2025-06-05
 
 ### Added

@@ -175,6 +175,13 @@ local_*.py
 local_*.sh
 test_*.sh
 
+# Hive Mind and Swarm directories
+.hive-mind/
+.swarm/
+
+# Root level test files (but not in subdirectories)
+/test_*.py
+
 # VS Code specific
 .vscode/*
 !.vscode/settings.json

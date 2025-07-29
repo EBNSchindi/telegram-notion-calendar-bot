@@ -10,6 +10,12 @@ from src.models.appointment import Appointment
 from src.models.shared_appointment import SharedAppointment
 from src.services.notion_service import NotionService
 from config.user_config import UserConfigManager, UserConfig
+from src.utils.duplicate_checker import DuplicateChecker
+from src.constants import PARTNER_SYNC_INTERVAL_HOURS
+
+# Define missing constants
+DATABASE_REFRESH_INTERVAL = 300  # 5 minutes
+PARTNER_SYNC_INTERVAL = PARTNER_SYNC_INTERVAL_HOURS * 3600  # Convert hours to seconds
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +60,10 @@ class PartnerSyncService:
                 database_id=user_config.notion_database_id
             )
             
+            # Use appropriate API key for shared database
+            shared_api_key = self.user_config_manager.get_shared_database_api_key(user_config)
             shared_service = NotionService(
-                notion_api_key=user_config.notion_api_key,
+                notion_api_key=shared_api_key,
                 database_id=user_config.shared_notion_database_id
             )
             
@@ -120,8 +128,10 @@ class PartnerSyncService:
                 database_id=user_config.notion_database_id
             )
             
+            # Use appropriate API key for shared database
+            shared_api_key = self.user_config_manager.get_shared_database_api_key(user_config)
             shared_service = NotionService(
-                notion_api_key=user_config.notion_api_key,
+                notion_api_key=shared_api_key,
                 database_id=user_config.shared_notion_database_id
             )
             
@@ -153,8 +163,10 @@ class PartnerSyncService:
             return True
         
         try:
+            # Use appropriate API key for shared database
+            shared_api_key = self.user_config_manager.get_shared_database_api_key(user_config)
             shared_service = NotionService(
-                notion_api_key=user_config.notion_api_key,
+                notion_api_key=shared_api_key,
                 database_id=user_config.shared_notion_database_id
             )
             
@@ -230,7 +242,7 @@ class PartnerSyncService:
             except Exception as e:
                 logger.error(f"Error in background sync loop: {e}")
                 # Wait before retrying to avoid tight error loops
-                await asyncio.sleep(300)  # 5 minutes
+                await asyncio.sleep(DATABASE_REFRESH_INTERVAL)  # Refresh interval
     
     async def _sync_single_appointment_internal(self, appointment: Appointment, 
                                               private_service: NotionService,
@@ -277,16 +289,48 @@ class PartnerSyncService:
                 sync_id = None
         
         if not sync_id:
-            # Not synced yet, create in shared database
-            shared_appointment = self._prepare_appointment_for_shared(appointment, user_id)
-            shared_page_id = await shared_service.create_appointment(shared_appointment)
+            # Not synced yet, check if a duplicate already exists in shared database
+            # This prevents creating duplicates if sync tracking was lost
+            existing_shared = await self._find_existing_shared_appointment(
+                shared_service, appointment, user_id
+            )
             
-            # Update private database with sync tracking
-            await self._update_sync_tracking(private_service, appointment.notion_page_id, shared_page_id)
-            
-            stats["created"] += 1
-            logger.debug(f"Created new synced appointment {shared_page_id}")
-            return True
+            if existing_shared:
+                # Found existing shared appointment, update sync tracking
+                await self._update_sync_tracking(private_service, appointment.notion_page_id, existing_shared.notion_page_id)
+                
+                # Update the existing appointment with current data
+                updated_appointment = self._prepare_appointment_for_shared(appointment, user_id)
+                await shared_service.update_appointment(existing_shared.notion_page_id, updated_appointment)
+                
+                stats["updated"] += 1
+                logger.debug(f"Found and linked existing shared appointment {existing_shared.notion_page_id}")
+                return True
+            else:
+                # Before creating, do one more check for duplicates across ALL appointments
+                # This handles edge cases where multiple users might create similar appointments
+                all_shared = await shared_service.get_appointments(limit=500)
+                duplicate = DuplicateChecker.find_appointment_by_content(appointment, all_shared)
+                
+                if duplicate:
+                    # Found a duplicate from another user, log and skip
+                    logger.warning(
+                        f"Skipping creation of '{appointment.title}' at {appointment.date} - "
+                        f"duplicate already exists in shared database (created by different user)"
+                    )
+                    stats["errors"] += 1
+                    return False
+                
+                # Create new appointment in shared database
+                shared_appointment = self._prepare_appointment_for_shared(appointment, user_id)
+                shared_page_id = await shared_service.create_appointment(shared_appointment)
+                
+                # Update private database with sync tracking
+                await self._update_sync_tracking(private_service, appointment.notion_page_id, shared_page_id)
+                
+                stats["created"] += 1
+                logger.debug(f"Created new synced appointment {shared_page_id}")
+                return True
         
         return False
     
@@ -437,6 +481,43 @@ class PartnerSyncService:
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
     
+    async def _find_existing_shared_appointment(self, shared_service: NotionService, 
+                                               appointment: Appointment, 
+                                               user_id: int) -> Optional[Appointment]:
+        """
+        Find an existing appointment in shared database that matches the given appointment.
+        
+        This helps prevent duplicates when sync tracking is lost.
+        
+        Args:
+            shared_service: Shared database service
+            appointment: Appointment to find
+            user_id: User ID who created the appointment
+            
+        Returns:
+            Existing shared appointment if found, None otherwise
+        """
+        try:
+            # Get all appointments from shared database
+            shared_appointments = await shared_service.get_appointments(limit=500)
+            
+            # Filter appointments from the same user
+            user_appointments = [
+                apt for apt in shared_appointments
+                if hasattr(apt, 'source_user_id') and apt.source_user_id == user_id
+            ]
+            
+            # Use DuplicateChecker to find matching appointment
+            matching_appointment = DuplicateChecker.find_appointment_by_content(
+                appointment, user_appointments
+            )
+            
+            return matching_appointment
+            
+        except Exception as e:
+            logger.warning(f"Error finding existing shared appointment: {e}")
+            return None
+    
     async def get_sync_status(self, user_config: UserConfig) -> Dict[str, Any]:
         """
         Get sync status and statistics for a user.
@@ -459,8 +540,10 @@ class PartnerSyncService:
                 database_id=user_config.notion_database_id
             )
             
+            # Use appropriate API key for shared database
+            shared_api_key = self.user_config_manager.get_shared_database_api_key(user_config)
             shared_service = NotionService(
-                notion_api_key=user_config.notion_api_key,
+                notion_api_key=shared_api_key,
                 database_id=user_config.shared_notion_database_id
             )
             

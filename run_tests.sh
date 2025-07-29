@@ -5,9 +5,12 @@ echo "🧪 Running tests for Telegram Notion Calendar Bot..."
 echo "=================================================="
 
 # Set environment variables for testing
-export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
+export PYTHONPATH="$(pwd):$(pwd)/src"
 export DEBUG=true
 export LOG_LEVEL=DEBUG
+
+# Set coverage environment variables
+export COVERAGE_CORE=sysmon
 
 # Create test environment file if it doesn't exist
 if [ ! -f .env.test ]; then
@@ -47,13 +50,13 @@ case "$1" in
         ;;
     "coverage")
         echo "📊 Running tests with coverage report..."
-        pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
+        pytest tests/ --cov=src --cov-report=term-missing --cov-report=html --cov-report=xml
         echo ""
         echo "📄 Coverage report generated in htmlcov/index.html"
         ;;
     "quick")
         echo "⚡ Running quick tests (no coverage)..."
-        pytest tests/ -x --tb=short --no-cov
+        pytest tests/ -x --tb=short
         ;;
     "memo")
         echo "📝 Running memo-related tests..."

@@ -186,7 +186,7 @@ class Appointment(BaseModel):
         
         # Extract date (from "Datum" or "Date" field for backward compatibility)
         date_prop = properties.get('Datum', properties.get('Date', {}))
-        if not date_prop or 'date' not in date_prop:
+        if not date_prop or 'date' not in date_prop or date_prop['date'] is None:
             raise ValueError(f"Missing or invalid date field in Notion page")
         date_str = date_prop['date']['start']
         date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))

@@ -234,10 +234,10 @@ Return ONLY the JSON object, no additional text."""
                         {"role": "system", "content": "You are a helpful assistant that improves appointment titles to be clear and descriptive in German. Keep titles concise (max 50 characters)."},
                         {"role": "user", "content": f"Improve this appointment title to be more descriptive but keep it short: '{title}'. Return only the improved title, nothing else."}
                     ],
-                    temperature=0.3,
+                    temperature=AI_TEMPERATURE,
                     max_tokens=100
                 ),
-                timeout=10
+                timeout=AI_TIMEOUT
             )
             
             improved = response.choices[0].message.content.strip()
@@ -393,8 +393,8 @@ Return ONLY the JSON object, no additional text."""
                                 {"role": "system", "content": "You are a precise memo/task extraction assistant. Always respond with valid JSON only."},
                                 {"role": "user", "content": prompt}
                             ],
-                            temperature=0.2,
-                            max_tokens=500
+                            temperature=AI_TEMPERATURE,
+                            max_tokens=AI_MAX_TOKENS
                         ),
                         timeout=self.timeout
                     )
