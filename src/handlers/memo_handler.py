@@ -19,6 +19,7 @@ from src.constants import (
     MEMO_STATUS_NOT_STARTED,
     MEMO_STATUS_IN_PROGRESS,
     MEMO_STATUS_COMPLETED,
+    MEMO_STATUS_POSTPONED,
     MenuButtons
 )
 from src.utils.error_handler import BotError, ErrorType, ErrorSeverity, SafeOperationContext
@@ -80,7 +81,8 @@ class MemoHandler:
                     status_emoji = {
                         MEMO_STATUS_NOT_STARTED: "⭕",
                         MEMO_STATUS_IN_PROGRESS: "🔄", 
-                        MEMO_STATUS_COMPLETED: "✅"
+                        MEMO_STATUS_COMPLETED: "✅",
+                        MEMO_STATUS_POSTPONED: "⏸️"
                     }
                     emoji = status_emoji.get(memo.status, "⭕")
                     

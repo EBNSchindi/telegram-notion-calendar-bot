@@ -73,6 +73,26 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Debug scripts (cleanup)
+debug_*.py
+test_*.py
+/test_*.sh
+docker-test.sh
+
+# Test outputs and reports (cleanup)
+*_REPORT.md
+*_SUMMARY.md
+*_FIX.md
+*_VALIDATION_*.md
+!docs/**/*.md
+!README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!LICENSE
+!TROUBLESHOOTING.md
+!DEVELOPMENT.md
+!ARCHITECTURE.md
+
 # Distribution / packaging
 dist/
 build/

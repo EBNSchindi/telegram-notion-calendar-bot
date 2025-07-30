@@ -143,7 +143,7 @@ class MemoService:
                 database_id=self.database_id,
                 filter={
                     "property": "Status",
-                    "status": {
+                    "select": {
                         "equals": status
                     }
                 },

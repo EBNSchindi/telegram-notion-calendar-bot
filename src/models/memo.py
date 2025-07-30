@@ -8,7 +8,8 @@ from src.constants import (
     MAX_MEMO_NOTES_LENGTH,
     MEMO_STATUS_NOT_STARTED,
     MEMO_STATUS_IN_PROGRESS,
-    MEMO_STATUS_COMPLETED
+    MEMO_STATUS_COMPLETED,
+    MEMO_STATUS_POSTPONED
 )
 
 
@@ -31,7 +32,7 @@ class Memo(BaseModel):
     @classmethod
     def validate_status(cls, v):
         """Validate status is one of the allowed values."""
-        allowed_statuses = [MEMO_STATUS_NOT_STARTED, MEMO_STATUS_IN_PROGRESS, MEMO_STATUS_COMPLETED]
+        allowed_statuses = [MEMO_STATUS_NOT_STARTED, MEMO_STATUS_IN_PROGRESS, MEMO_STATUS_COMPLETED, MEMO_STATUS_POSTPONED]
         if v not in allowed_statuses:
             raise ValueError(f"Status must be one of: {', '.join(allowed_statuses)}")
         return v
@@ -57,7 +58,7 @@ class Memo(BaseModel):
                 ]
             },
             "Status": {
-                "select": {
+                "status": {
                     "name": self.status
                 }
             }
@@ -110,8 +111,8 @@ class Memo(BaseModel):
         # Extract status
         status = MEMO_STATUS_NOT_STARTED
         status_prop = properties.get('Status', {})
-        if status_prop.get('select') and status_prop['select']:
-            status = status_prop['select']['name']
+        if status_prop.get('status') and status_prop['status']:
+            status = status_prop['status']['name']
         
         # Extract due date
         faelligkeitsdatum = None
@@ -158,7 +159,8 @@ class Memo(BaseModel):
         status_emoji = {
             MEMO_STATUS_NOT_STARTED: "⭕",
             MEMO_STATUS_IN_PROGRESS: "🔄",
-            MEMO_STATUS_COMPLETED: "✅"
+            MEMO_STATUS_COMPLETED: "✅",
+            MEMO_STATUS_POSTPONED: "⏸️"
         }
         emoji = status_emoji.get(self.status, "⭕")
         
