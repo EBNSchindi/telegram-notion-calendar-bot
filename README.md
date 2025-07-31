@@ -32,11 +32,13 @@ Eine professionelle, refactorisierte Telegram-Bot-Lösung für intelligente Kale
 - **Mehrsprachig**: Deutsch und Englisch mit automatischer Erkennung
 
 ### 📝 **Memo-System (NEU)**
-- **Strukturierte Memos**: Aufgabe, Status, Fälligkeitsdatum, Bereich, Projekt
-- **Status-Management**: "Nicht begonnen", "In Arbeit", "Erledigt"
+- **Strukturierte Memos**: Aufgabe, Status_Check (Checkbox), Fälligkeitsdatum, Bereich, Projekt
+- **Status-Verwaltung**: Checkbox-basiert (☐ offen / ✅ erledigt)
+- **Smart-Filter**: Zeigt standardmäßig nur offene Memos (Status_Check = false)
 - **KI-Extraktion**: "Präsentation vorbereiten bis Freitag" → strukturiertes Memo
 - **Kategorisierung**: Bereich und Projekt als Multi-Select-Felder
 - **Integration**: Nahtlos im vereinfachten 2x2+1 Hauptmenü
+- **Bot-Befehle**: `/show_all` für alle Memos inklusive erledigte
 
 ### 🎛 **Vereinfachtes Hauptmenü mit Navigation**
 ```

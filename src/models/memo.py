@@ -18,7 +18,7 @@ class Memo(BaseModel):
     
     # Core fields matching Notion database
     aufgabe: str = Field(..., min_length=1, max_length=MAX_MEMO_TITLE_LENGTH, description="Task/memo title")
-    status: str = Field(default=MEMO_STATUS_NOT_STARTED, description="Task status")
+    status_check: bool = Field(default=False, description="Status checkbox")
     faelligkeitsdatum: Optional[datetime] = Field(None, description="Due date")
     bereich: Optional[str] = Field(None, description="Area/category")
     projekt: Optional[str] = Field(None, description="Project")
@@ -28,14 +28,6 @@ class Memo(BaseModel):
     notion_page_id: Optional[str] = Field(None, description="Notion page ID after creation")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
     
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        """Validate status is one of the allowed values."""
-        allowed_statuses = [MEMO_STATUS_NOT_STARTED, MEMO_STATUS_IN_PROGRESS, MEMO_STATUS_COMPLETED, MEMO_STATUS_POSTPONED]
-        if v not in allowed_statuses:
-            raise ValueError(f"Status must be one of: {', '.join(allowed_statuses)}")
-        return v
     
     @field_validator('aufgabe')
     @classmethod
@@ -58,6 +50,12 @@ class Memo(BaseModel):
             raise ValueError(f"Notizen exceeds maximum length of {MAX_MEMO_NOTES_LENGTH} characters")
         return v
     
+    @field_validator('status_check')
+    @classmethod
+    def validate_status_check(cls, v):
+        """Validate status_check is a boolean."""
+        return v if v is not None else False
+    
     def to_notion_properties(self, timezone: str = "Europe/Berlin") -> dict:
         """Convert memo to Notion database properties."""
         properties = {
@@ -70,10 +68,8 @@ class Memo(BaseModel):
                     }
                 ]
             },
-            "Status": {
-                "status": {
-                    "name": self.status
-                }
+            "Status_Check": {
+                "checkbox": self.status_check
             }
         }
         
@@ -108,6 +104,7 @@ class Memo(BaseModel):
             ] if self.notizen else []
         }
         
+        
         return properties
     
     @classmethod
@@ -121,11 +118,11 @@ class Memo(BaseModel):
         if aufgabe_prop.get('title') and aufgabe_prop['title']:
             aufgabe = aufgabe_prop['title'][0]['text']['content']
         
-        # Extract status
-        status = MEMO_STATUS_NOT_STARTED
-        status_prop = properties.get('Status', {})
-        if status_prop.get('status') and status_prop['status']:
-            status = status_prop['status']['name']
+        # Extract status_check
+        status_check = False
+        status_check_prop = properties.get('Status_Check', {})
+        if status_check_prop.get('checkbox') is not None:
+            status_check = status_check_prop['checkbox']
         
         # Extract due date
         faelligkeitsdatum = None
@@ -152,12 +149,18 @@ class Memo(BaseModel):
         if notizen_prop.get('rich_text') and notizen_prop['rich_text']:
             notizen = notizen_prop['rich_text'][0]['text']['content']
         
+        # Extract status check
+        status_check = False
+        status_check_prop = properties.get('Status Check', {})
+        if status_check_prop.get('checkbox') is not None:
+            status_check = status_check_prop['checkbox']
+        
         # Extract creation date
         created_at = datetime.fromisoformat(page['created_time'].replace('Z', '+00:00'))
         
         return cls(
             aufgabe=aufgabe,
-            status=status,
+            status_check=status_check,
             faelligkeitsdatum=faelligkeitsdatum,
             bereich=bereich,
             projekt=projekt,
@@ -170,21 +173,13 @@ class Memo(BaseModel):
         """Format memo for Telegram display with proper XSS protection."""
         from src.utils.security import InputSanitizer
         
-        # Status emoji
-        status_emoji = {
-            MEMO_STATUS_NOT_STARTED: "⭕",
-            MEMO_STATUS_IN_PROGRESS: "🔄",
-            MEMO_STATUS_COMPLETED: "✅",
-            MEMO_STATUS_POSTPONED: "⏸️"
-        }
-        emoji = status_emoji.get(self.status, "⭕")
+        # Checkbox emoji
+        emoji = "✅" if self.status_check else "☐"
         
         # Escape all text fields for Telegram markdown to prevent XSS
         escaped_aufgabe = InputSanitizer.sanitize_telegram_markdown(self.aufgabe)
-        escaped_status = InputSanitizer.sanitize_telegram_markdown(self.status)
         
         formatted = f"{emoji} *{escaped_aufgabe}*\n"
-        formatted += f"📊 Status: {escaped_status}\n"
         
         if self.faelligkeitsdatum:
             tz = pytz.timezone(timezone)
@@ -204,3 +199,11 @@ class Memo(BaseModel):
             formatted += f"📝 Notizen: {escaped_notizen}\n"
         
         return formatted
+    
+    def format_for_telegram_with_checkbox(self, timezone: str = "Europe/Berlin") -> str:
+        """Format memo for Telegram display with checkbox status.
+        
+        This is an alias for format_for_telegram() for backward compatibility.
+        """
+        return self.format_for_telegram(timezone)
+    

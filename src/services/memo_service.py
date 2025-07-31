@@ -74,7 +74,7 @@ class MemoService:
             # Sanitize memo content before sending to Notion
             sanitized_memo = Memo(
                 aufgabe=InputSanitizer.sanitize_for_notion(memo.aufgabe),
-                status=memo.status,  # Status is validated by model
+                status_check=memo.status_check,  # Use status_check instead of status
                 faelligkeitsdatum=memo.faelligkeitsdatum,
                 bereich=InputSanitizer.sanitize_for_notion(memo.bereich) if memo.bereich else None,
                 projekt=InputSanitizer.sanitize_for_notion(memo.projekt) if memo.projekt else None,
@@ -119,20 +119,10 @@ class MemoService:
             filter_dict = None
             if only_open:
                 filter_dict = {
-                    "or": [
-                        {
-                            "property": "Status",
-                            "status": {
-                                "equals": "Nicht begonnen"
-                            }
-                        },
-                        {
-                            "property": "Status", 
-                            "status": {
-                                "equals": "In Arbeit"
-                            }
-                        }
-                    ]
+                    "property": "Status_Check",
+                    "checkbox": {
+                        "equals": False
+                    }
                 }
             
             query_params = {
@@ -456,6 +446,167 @@ class MemoService:
                 ErrorType.NOTION_API,
                 ErrorSeverity.HIGH,
                 user_message="📝 Fehler beim Löschen des Memos. Bitte versuche es erneut."
+            )
+    
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
+    async def get_all_memos_including_checked(self, limit: int = 10) -> List[Memo]:
+        """
+        Get all recent memos from Notion database, including checked ones.
+        
+        Args:
+            limit: Maximum number of memos to retrieve (default: 10)
+            
+        Returns:
+            List[Memo]: List of all recent memos regardless of status_check
+        """
+        try:
+            query_params = {
+                "database_id": self.database_id,
+                "sorts": [
+                    {
+                        "timestamp": "created_time",
+                        "direction": "descending"
+                    }
+                ],
+                "page_size": limit
+            }
+                
+            response = self.client.databases.query(**query_params)
+            
+            # Defensive programming: handle corrupted API responses
+            if not response:
+                logger.error("Received null response from Notion API")
+                raise BotError(
+                    "Received invalid response from Notion API",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültige API-Antwort."
+                )
+            
+            if not isinstance(response, dict):
+                logger.error(f"Response is not a dictionary: {type(response)}")
+                raise BotError(
+                    f"Invalid response format from Notion API: {type(response)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültiges Antwortformat."
+                )
+            
+            # Handle missing or malformed 'results' key
+            results = response.get("results")
+            if results is None:
+                logger.error("Response missing 'results' key")
+                raise BotError(
+                    "Response missing 'results' key",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Unvollständige API-Antwort."
+                )
+            
+            if not isinstance(results, list):
+                logger.error(f"Results is not a list: {type(results)}")
+                raise BotError(
+                    f"Invalid results format from Notion API: {type(results)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültiges Ergebnisformat."
+                )
+            
+            memos = []
+            corrupted_pages = 0
+            
+            for i, page in enumerate(results):
+                try:
+                    # Validate page structure
+                    if not isinstance(page, dict):
+                        logger.warning(f"Page {i} is not a dictionary: {type(page)}")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'id' not in page:
+                        logger.warning(f"Page {i} missing 'id' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'properties' not in page:
+                        logger.warning(f"Page {page.get('id', 'unknown')} missing 'properties' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if not isinstance(page['properties'], dict):
+                        logger.warning(f"Page {page['id']} has invalid properties type: {type(page['properties'])}")
+                        corrupted_pages += 1
+                        continue
+                    
+                    memo = Memo.from_notion_page(page)
+                    memos.append(memo)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to parse memo from page {page.get('id', 'unknown')}: {e}")
+                    corrupted_pages += 1
+                    continue
+            
+            # Log corrupted pages for monitoring
+            if corrupted_pages > 0:
+                logger.warning(f"Encountered {corrupted_pages} corrupted pages out of {len(results)} total pages")
+            
+            logger.info(f"Retrieved {len(memos)} memos (including checked) from Notion ({corrupted_pages} pages skipped)")
+            return memos
+            
+        except APIResponseError as e:
+            logger.error(f"Failed to retrieve all memos from Notion: {e}")
+            raise BotError(
+                f"Failed to retrieve all memos from Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Laden aller Memos aus Notion. Bitte versuche es später erneut."
+            )
+    
+    @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
+    async def update_memo_status_check(self, page_id: str, checked: bool) -> bool:
+        """
+        Update only the status_check (checkbox) of a memo.
+        
+        Args:
+            page_id: Notion page ID
+            checked: New checkbox status (True for checked, False for unchecked)
+            
+        Returns:
+            bool: True if successful
+        """
+        try:
+            # Validate page_id to prevent injection
+            validated_page_id = InputSanitizer.validate_notion_id(page_id)
+            
+            properties = {
+                "Status Check": {
+                    "checkbox": bool(checked)
+                }
+            }
+            
+            response = self.client.pages.update(
+                page_id=validated_page_id,
+                properties=properties
+            )
+            
+            logger.info(f"Updated memo status_check to {checked} in Notion: {validated_page_id}")
+            return True
+            
+        except ValueError as e:
+            logger.error(f"Invalid page_id format: {e}")
+            raise BotError(
+                f"Invalid page ID format: {str(e)}",
+                ErrorType.VALIDATION,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Ungültige Memo-ID. Bitte versuche es erneut."
+            )
+        except APIResponseError as e:
+            logger.error(f"Failed to update memo status_check in Notion: {e}")
+            raise BotError(
+                f"Failed to update memo status_check in Notion: {str(e)}",
+                ErrorType.NOTION_API,
+                ErrorSeverity.MEDIUM,
+                user_message="📝 Fehler beim Aktualisieren des Memo-Checkbox-Status. Bitte versuche es erneut."
             )
     
     async def test_connection(self) -> bool:

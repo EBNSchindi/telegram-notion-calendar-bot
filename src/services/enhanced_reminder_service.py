@@ -130,15 +130,18 @@ class EnhancedReminderService:
                 if open_memos:
                     message_parts.append("\n\n*📝 Offene Memos:*")
                     for memo in open_memos[:5]:  # Max 5 memos in reminder
-                        status_emoji = "🔄" if memo.status == "In Arbeit" else "⭕"
-                        memo_text = f"{status_emoji} *{memo.aufgabe}*"
+                        # Use new checkbox formatting for consistent display
+                        memo_formatted = memo.format_for_telegram_with_checkbox(user.timezone)
+                        # Extract just the first line (checkbox + emoji + title) for compact reminder
+                        memo_lines = memo_formatted.split('\n')
+                        memo_title_line = memo_lines[0] if memo_lines else f"☐ *{memo.aufgabe}*"
                         
-                        # Add due date if available
+                        # Add due date if available on the same line for compact display
                         if memo.faelligkeitsdatum:
                             memo_date = memo.faelligkeitsdatum.astimezone(tz) if memo.faelligkeitsdatum.tzinfo else tz.localize(memo.faelligkeitsdatum)
-                            memo_text += f" (📅 {memo_date.strftime('%d.%m.%Y')})"
+                            memo_title_line += f" (📅 {memo_date.strftime('%d.%m.%Y')})"
                         
-                        message_parts.append(memo_text)
+                        message_parts.append(memo_title_line)
                 
                 # Add legend
                 if today_appointments or tomorrow_appointments:
@@ -162,7 +165,8 @@ class EnhancedReminderService:
                 logger.info(
                     f"Sent reminder to user {user.telegram_user_id}: "
                     f"Today: {total_today} ({today_private} private, {today_shared} shared), "
-                    f"Tomorrow: {total_tomorrow} ({tomorrow_private} private, {tomorrow_shared} shared)"
+                    f"Tomorrow: {total_tomorrow} ({tomorrow_private} private, {tomorrow_shared} shared), "
+                    f"Open memos: {len(open_memos)}"
                 )
             else:
                 # No appointments or memos - send appropriate message
@@ -201,6 +205,17 @@ class EnhancedReminderService:
             # Create combined appointment service for this user
             combined_service = CombinedAppointmentService(user_config)
             
+            # Create memo service if available
+            memo_service = None
+            open_memos = []
+            if user_config.memo_database_id:
+                try:
+                    memo_service = MemoService.from_user_config(user_config)
+                    # Get only open memos (not completed)
+                    open_memos = await memo_service.get_recent_memos(limit=5, only_open=True)
+                except Exception as e:
+                    logger.warning(f"Could not load memos for preview for user {user_config.telegram_user_id}: {e}")
+            
             # Get user's timezone
             tz = pytz.timezone(user_config.timezone)
             today = datetime.now(tz).date()
@@ -213,12 +228,15 @@ class EnhancedReminderService:
             # Build preview message
             message_parts = ["📋 *Reminder-Vorschau:*\n"]
             
-            if today_appointments or tomorrow_appointments:
+            if today_appointments or tomorrow_appointments or open_memos:
                 if today_appointments:
                     message_parts.append(f"\n*📅 Heute ({today.strftime('%d.%m.%Y')})* - {len(today_appointments)} Termine")
                     
                 if tomorrow_appointments:
                     message_parts.append(f"*🗓️ Morgen ({tomorrow.strftime('%d.%m.%Y')})* - {len(tomorrow_appointments)} Termine")
+                
+                if open_memos:
+                    message_parts.append(f"*📝 Offene Memos* - {len(open_memos)} unerledigte Aufgaben")
                 
                 # Statistics
                 total_private = sum(1 for x in today_appointments + tomorrow_appointments if not x.is_shared)
@@ -227,8 +245,9 @@ class EnhancedReminderService:
                 message_parts.append(f"\n📊 *Statistik:*")
                 message_parts.append(f"👤 Private: {total_private}")
                 message_parts.append(f"🌐 Gemeinsam: {total_shared}")
+                message_parts.append(f"📝 Offene Memos: {len(open_memos)}")
             else:
-                message_parts.append("🎉 Keine Termine für heute oder morgen!")
+                message_parts.append("🎉 Keine Termine oder offene Memos!")
             
             return "\n".join(message_parts)
             

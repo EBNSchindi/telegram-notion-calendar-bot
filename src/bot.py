@@ -147,6 +147,32 @@ class EnhancedCalendarBot:
         elif command == "tomorrow":
             await handler.tomorrow_appointments(update, context)
     
+    async def handle_memo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                command: str) -> None:
+        """Handle memo commands with user-specific configuration."""
+        user_id = update.effective_user.id
+        handler = self.get_appointment_handler(user_id)
+        
+        if not handler:
+            await update.message.reply_text(
+                "❌ Du bist noch nicht konfiguriert. "
+                "Bitte kontaktiere den Administrator."
+            )
+            return
+        
+        if not handler.memo_handler:
+            await update.message.reply_text(
+                "❌ Memo-Funktionalität nicht verfügbar. "
+                "Bitte wende dich an den Administrator."
+            )
+            return
+        
+        # Call the appropriate memo handler method
+        if command == "show_all":
+            await handler.memo_handler.handle_show_all_command(update, context)
+        elif command == "check_memo":
+            await handler.memo_handler.handle_check_memo_command(update, context)
+    
     async def reminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle reminder settings command."""
         user_id = update.effective_user.id
@@ -365,6 +391,8 @@ class EnhancedCalendarBot:
             BotCommand("add", "➕ Termin hinzufügen"),
             BotCommand("list", "📋 Alle Termine"),
             BotCommand("reminder", "⚙️ Erinnerungen"),
+            BotCommand("show_all", "📋 Alle Memos anzeigen"),
+            BotCommand("check_memo", "☑️ Memo abhaken"),
             BotCommand("help", "❓ Hilfe")
         ]
         
@@ -524,6 +552,16 @@ class EnhancedCalendarBot:
         self.application.add_handler(CommandHandler(
             "list", 
             lambda u, c: self.handle_appointment_command(u, c, "list")
+        ))
+        
+        # Memo handlers
+        self.application.add_handler(CommandHandler(
+            "show_all", 
+            lambda u, c: self.handle_memo_command(u, c, "show_all")
+        ))
+        self.application.add_handler(CommandHandler(
+            "check_memo", 
+            lambda u, c: self.handle_memo_command(u, c, "check_memo")
         ))
         
         # Callback query handler for inline keyboards

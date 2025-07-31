@@ -219,6 +219,26 @@ out/
 
 
 
+
+# Claude AI specific  
+.claude/
+*.claude
+claude-session.json
+CLAUDE.md
+
+# Test artifacts
+edge_case_tests.md
+test_failure_report.md
+workflow_test_results.md
+manual_test_report.*
+final_memo_test.py
+tests/HIVE_MIND_ANALYSIS.md
+tests/run_api_integration_tests.py
+
+# Test environment
+.env.test
+
+
 # Claude Flow generated files
 .claude/settings.local.json
 .mcp.json
@@ -243,21 +263,3 @@ claude-flow
 claude-flow.bat
 claude-flow.ps1
 hive-mind-prompt-*.txt
-
-# Claude AI specific  
-.claude/
-*.claude
-claude-session.json
-CLAUDE.md
-
-# Test artifacts
-edge_case_tests.md
-test_failure_report.md
-workflow_test_results.md
-manual_test_report.*
-final_memo_test.py
-tests/HIVE_MIND_ANALYSIS.md
-tests/run_api_integration_tests.py
-
-# Test environment
-.env.test

@@ -58,9 +58,13 @@ class MemoHandler:
         keyboard = [[InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="back_to_menu")]]
         return InlineKeyboardMarkup(keyboard)
     
+    def is_memo_service_available(self) -> bool:
+        """Check if memo service is available."""
+        return self.memo_service is not None
+    
     @rate_limit(max_requests=AI_RATE_LIMIT_REQUESTS, time_window=AI_RATE_LIMIT_WINDOW)
     async def show_recent_memos(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Show the most recent memos."""
+        """Show the most recent memos (only unchecked ones by default)."""
         if not self.memo_service:
             await update.effective_message.reply_text(
                 "❌ Memo-Datenbank nicht konfiguriert. Bitte wende dich an den Administrator.",
@@ -77,14 +81,8 @@ class MemoHandler:
             else:
                 message = f"📝 *Deine letzten {len(memos)} Memos*\n\n"
                 for i, memo in enumerate(memos, 1):
-                    # Status emoji
-                    status_emoji = {
-                        MEMO_STATUS_NOT_STARTED: "⭕",
-                        MEMO_STATUS_IN_PROGRESS: "🔄", 
-                        MEMO_STATUS_COMPLETED: "✅",
-                        MEMO_STATUS_POSTPONED: "⏸️"
-                    }
-                    emoji = status_emoji.get(memo.status, "⭕")
+                    # Status emoji based on checkbox
+                    emoji = "✅" if memo.status_check else "☐"
                     
                     # Format memo entry
                     entry = f"{i}. {emoji} *{memo.aufgabe}*"
@@ -122,7 +120,7 @@ class MemoHandler:
                 )
                 
         except Exception as e:
-            logger.error(f"Error showing recent memos: {e}")
+            logger.error(f"Error showing recent memos: {e}", exc_info=True)
             error_message = "❌ Fehler beim Laden der Memos. Bitte versuche es später erneut."
             
             if update.callback_query:
@@ -223,7 +221,7 @@ class MemoHandler:
             try:
                 memo = Memo(
                     aufgabe=validated_data['aufgabe'],
-                    status=MEMO_STATUS_NOT_STARTED,
+                    status_check=False,  # Neue Memos sind standardmäßig nicht abgehakt
                     faelligkeitsdatum=faelligkeitsdatum,
                     bereich=validated_data.get('bereich'),
                     projekt=validated_data.get('projekt'),
@@ -277,6 +275,160 @@ class MemoHandler:
             # Clear context
             context.user_data['awaiting_memo'] = False
     
+    async def handle_show_all_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show all memos including checked ones with checkbox indicators."""
+        if not self.memo_service:
+            await update.effective_message.reply_text(
+                "❌ Memo-Datenbank nicht konfiguriert. Bitte wende dich an den Administrator.",
+                parse_mode='Markdown',
+                reply_markup=self.get_back_to_menu_keyboard()
+            )
+            return
+        
+        try:
+            memos = await self.memo_service.get_all_memos_including_checked(limit=DEFAULT_APPOINTMENTS_LIMIT)
+            
+            if not memos:
+                message = "📝 *Alle deine Memos*\n\nNoch keine Memos vorhanden! 🎯\nErstelle dein erstes Memo mit dem ➕ Button."
+            else:
+                message = f"📝 *Alle deine Memos ({len(memos)})*\n\n"
+                for i, memo in enumerate(memos, 1):
+                    # Use checkbox format for display
+                    formatted_memo = memo.format_for_telegram_with_checkbox(self.user_config.timezone or 'Europe/Berlin')
+                    # Extract first line for compact display
+                    first_line = formatted_memo.split('\n')[0]
+                    message += f"{i}. {first_line}\n"
+            
+            # Add buttons for actions
+            keyboard = [
+                [InlineKeyboardButton("➕ Neues Memo", callback_data="add_memo")],
+                [InlineKeyboardButton("☑️ Memo abhaken", callback_data="check_memo")],
+                [InlineKeyboardButton("📝 Nur offene Memos", callback_data="recent_memos")],
+                [InlineKeyboardButton("🏠 Hauptmenü", callback_data="main_menu")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Send or edit message depending on context
+            if update.callback_query:
+                await update.callback_query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.effective_message.reply_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                
+        except Exception as e:
+            logger.error(f"Error showing all memos: {e}")
+            error_message = "❌ Fehler beim Laden aller Memos. Bitte versuche es später erneut."
+            
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text=error_message)
+            else:
+                await update.effective_message.reply_text(text=error_message, reply_markup=self.get_back_to_menu_keyboard())
+    
+    async def handle_check_memo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show a list of unchecked memos with check buttons."""
+        if not self.memo_service:
+            await update.effective_message.reply_text(
+                "❌ Memo-Datenbank nicht konfiguriert. Bitte wende dich an den Administrator.",
+                parse_mode='Markdown',
+                reply_markup=self.get_back_to_menu_keyboard()
+            )
+            return
+        
+        try:
+            # Get only unchecked memos
+            memos = await self.memo_service.get_recent_memos(limit=10, only_open=True)
+            
+            if not memos:
+                message = "📝 *Memos abhaken*\n\nKeine offenen Memos zum Abhaken vorhanden! 🎯\nErstelle ein neues Memo mit dem ➕ Button."
+                keyboard = [
+                    [InlineKeyboardButton("➕ Neues Memo", callback_data="add_memo")],
+                    [InlineKeyboardButton("🏠 Hauptmenü", callback_data="main_menu")]
+                ]
+            else:
+                message = f"📝 *Memos abhaken ({len(memos)} offen)*\n\nWähle ein Memo zum Abhaken:"
+                
+                # Create keyboard with check buttons for each memo
+                keyboard = []
+                for memo in memos:
+                    # Limit title length for button display
+                    title = memo.aufgabe[:30] + "..." if len(memo.aufgabe) > 30 else memo.aufgabe
+                    button_text = f"☑️ {title}"
+                    keyboard.append([InlineKeyboardButton(button_text, callback_data=f"check_memo_{memo.notion_page_id}")])
+                
+                # Add navigation buttons
+                keyboard.extend([
+                    [InlineKeyboardButton("📝 Alle Memos anzeigen", callback_data="show_all_memos")],
+                    [InlineKeyboardButton("🏠 Hauptmenü", callback_data="main_menu")]
+                ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Send or edit message depending on context
+            if update.callback_query:
+                await update.callback_query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.effective_message.reply_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                
+        except Exception as e:
+            logger.error(f"Error showing check memo list: {e}")
+            error_message = "❌ Fehler beim Laden der Memos zum Abhaken. Bitte versuche es später erneut."
+            
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text=error_message)
+            else:
+                await update.effective_message.reply_text(text=error_message, reply_markup=self.get_back_to_menu_keyboard())
+    
+    async def handle_memo_check_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, page_id: str) -> None:
+        """Handle checking/unchecking a specific memo."""
+        if not self.memo_service:
+            await update.callback_query.answer("❌ Memo-Service nicht verfügbar")
+            return
+        
+        query = update.callback_query
+        
+        try:
+            # Update the memo status check to True (checked)
+            success = await self.memo_service.update_memo_status_check(page_id, True)
+            
+            if success:
+                await query.answer("✅ Memo als erledigt markiert!")
+                
+                # Show success message and return to memo list
+                message = "✅ *Memo erfolgreich abgehakt!*\n\nDas Memo wurde als erledigt markiert."
+                keyboard = [
+                    [InlineKeyboardButton("☑️ Weitere Memos abhaken", callback_data="check_memo")],
+                    [InlineKeyboardButton("📝 Alle Memos anzeigen", callback_data="show_all_memos")],
+                    [InlineKeyboardButton("🏠 Hauptmenü", callback_data="main_menu")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.answer("❌ Fehler beim Abhaken des Memos")
+                
+        except Exception as e:
+            logger.error(f"Error checking memo {page_id}: {e}")
+            await query.answer("❌ Fehler beim Abhaken des Memos")
+    
     async def handle_memo_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle memo-related callback queries."""
         query = update.callback_query
@@ -286,6 +438,14 @@ class MemoHandler:
             await self.show_recent_memos(update, context)
         elif query.data == "add_memo":
             await self.prompt_for_new_memo(update, context)
+        elif query.data == "show_all_memos":
+            await self.handle_show_all_command(update, context)
+        elif query.data == "check_memo":
+            await self.handle_check_memo_command(update, context)
+        elif query.data.startswith("check_memo_"):
+            # Extract page_id from callback data
+            page_id = query.data.replace("check_memo_", "")
+            await self.handle_memo_check_callback(update, context, page_id)
         elif query.data == "cancel_memo":
             context.user_data['awaiting_memo'] = False
             from src.handlers.enhanced_appointment_handler import EnhancedAppointmentHandler

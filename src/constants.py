@@ -106,6 +106,8 @@ class CallbackData:
     HELP = "help"
     PARTNER_RELEVANT_YES = "partner_relevant_yes"
     PARTNER_RELEVANT_NO = "partner_relevant_no"
+    SHOW_ALL_MEMOS = "show_all_memos"
+    CHECK_MEMO = "check_memo"
 
 # Default Values
 DEFAULT_REMINDER_TIME = "08:00"
