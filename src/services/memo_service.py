@@ -103,27 +103,53 @@ class MemoService:
             )
     
     @handle_bot_error(ErrorType.NOTION_API, ErrorSeverity.MEDIUM)
-    async def get_recent_memos(self, limit: int = 10) -> List[Memo]:
+    async def get_recent_memos(self, limit: int = 10, only_open: bool = True) -> List[Memo]:
         """
         Get recent memos from Notion database, sorted by creation date (newest first).
         
         Args:
             limit: Maximum number of memos to retrieve (default: 10)
+            only_open: If True, only return non-completed memos (default: True)
             
         Returns:
             List[Memo]: List of recent memos
         """
         try:
-            response = self.client.databases.query(
-                database_id=self.database_id,
-                sorts=[
+            # Build filter for open memos if requested
+            filter_dict = None
+            if only_open:
+                filter_dict = {
+                    "or": [
+                        {
+                            "property": "Status",
+                            "status": {
+                                "equals": "Nicht begonnen"
+                            }
+                        },
+                        {
+                            "property": "Status", 
+                            "status": {
+                                "equals": "In Arbeit"
+                            }
+                        }
+                    ]
+                }
+            
+            query_params = {
+                "database_id": self.database_id,
+                "sorts": [
                     {
                         "timestamp": "created_time",
                         "direction": "descending"
                     }
                 ],
-                page_size=limit
-            )
+                "page_size": limit
+            }
+            
+            if filter_dict:
+                query_params["filter"] = filter_dict
+                
+            response = self.client.databases.query(**query_params)
             
             # Defensive programming: handle corrupted API responses
             if not response:

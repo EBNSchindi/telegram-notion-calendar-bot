@@ -8,6 +8,7 @@ from telegram import Bot
 from telegram.error import TelegramError
 
 from src.services.combined_appointment_service import CombinedAppointmentService
+from src.services.memo_service import MemoService
 from config.user_config import UserConfig, UserConfigManager
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,17 @@ class EnhancedReminderService:
             # Create combined appointment service for this user
             combined_service = CombinedAppointmentService(user)
             
+            # Create memo service if available
+            memo_service = None
+            open_memos = []
+            if user.memo_database_id:
+                try:
+                    memo_service = MemoService.from_user_config(user)
+                    # Get only open memos (not completed)
+                    open_memos = await memo_service.get_recent_memos(limit=5, only_open=True)
+                except Exception as e:
+                    logger.warning(f"Could not load memos for user {user.telegram_user_id}: {e}")
+            
             # Get user's timezone
             tz = pytz.timezone(user.timezone)
             today = datetime.now(tz).date()
@@ -89,7 +101,7 @@ class EnhancedReminderService:
             # Build message
             message_parts = []
             
-            if today_appointments or tomorrow_appointments:
+            if today_appointments or tomorrow_appointments or open_memos:
                 message_parts.append("📅 *Deine Termine:*\n")
                 
                 if today_appointments:
@@ -114,8 +126,23 @@ class EnhancedReminderService:
                         if apt.description:
                             message_parts.append(f"   _{apt.description}_")
                 
+                # Add open memos if available
+                if open_memos:
+                    message_parts.append("\n\n*📝 Offene Memos:*")
+                    for memo in open_memos[:5]:  # Max 5 memos in reminder
+                        status_emoji = "🔄" if memo.status == "In Arbeit" else "⭕"
+                        memo_text = f"{status_emoji} *{memo.aufgabe}*"
+                        
+                        # Add due date if available
+                        if memo.faelligkeitsdatum:
+                            memo_date = memo.faelligkeitsdatum.astimezone(tz) if memo.faelligkeitsdatum.tzinfo else tz.localize(memo.faelligkeitsdatum)
+                            memo_text += f" (📅 {memo_date.strftime('%d.%m.%Y')})"
+                        
+                        message_parts.append(memo_text)
+                
                 # Add legend
-                message_parts.append("\n\n_👤 Private Termine | 🌐 Gemeinsame Termine_")
+                if today_appointments or tomorrow_appointments:
+                    message_parts.append("\n\n_👤 Private Termine | 🌐 Gemeinsame Termine_")
                 
                 # Send message
                 await self.bot.send_message(
@@ -138,7 +165,7 @@ class EnhancedReminderService:
                     f"Tomorrow: {total_tomorrow} ({tomorrow_private} private, {tomorrow_shared} shared)"
                 )
             else:
-                # Send "no appointments" message
+                # No appointments or memos - send appropriate message
                 message_parts.append("📅 *Deine Termine:*\n")
                 message_parts.append("🎉 Keine Termine für heute oder morgen!")
                 message_parts.append("\nGenieße deine freie Zeit! ☀️")
