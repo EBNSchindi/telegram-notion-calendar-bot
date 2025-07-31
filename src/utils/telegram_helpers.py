@@ -122,6 +122,14 @@ class KeyboardBuilder:
     def create_back_to_menu_keyboard() -> InlineKeyboardMarkup:
         """Create a simple back to menu keyboard."""
         keyboard = [
-            [InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="main_menu")]
+            [InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="back_to_menu")]
         ]
         return InlineKeyboardMarkup(keyboard)
+
+
+def get_back_to_menu_keyboard() -> InlineKeyboardMarkup:
+    """Get a keyboard with only the 'Back to Menu' button.
+    
+    This is a convenience function for easy access to the back button.
+    """
+    return TelegramHelper.create_back_to_menu_keyboard()

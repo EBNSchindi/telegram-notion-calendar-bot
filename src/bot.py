@@ -48,6 +48,7 @@ HELP_TIPS = "💡 **Tipps:**"
 from src.constants import PARTNER_SYNC_INTERVAL_HOURS
 PARTNER_SYNC_INTERVAL = PARTNER_SYNC_INTERVAL_HOURS * 3600  # Convert to seconds
 from src.constants import StatusEmojis, BOT_COMMANDS
+from src.utils.telegram_helpers import get_back_to_menu_keyboard
 
 # Enable secure logging with data sanitization
 from utils.log_sanitizer import setup_secure_logging
@@ -302,7 +303,11 @@ class EnhancedCalendarBot:
 • Termine werden automatisch aus beiden Datenbanken kombiniert
 • Erinnerungen zeigen die Quelle jedes Termins (👤/🌐)
         """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        await update.message.reply_text(
+            help_text, 
+            parse_mode='Markdown',
+            reply_markup=get_back_to_menu_keyboard()
+        )
 
     async def echo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages - check for appointment input from menu."""
@@ -514,7 +519,10 @@ class EnhancedCalendarBot:
                         "Bitte versuche es erneut oder kontaktiere den Administrator."
                     )
                 
-                await update.effective_message.reply_text(user_message)
+                await update.effective_message.reply_text(
+                    user_message,
+                    reply_markup=get_back_to_menu_keyboard()
+                )
                 
             except Exception as e:
                 logger.error(f"Failed to send error message to user {user_id}: {e}")

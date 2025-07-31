@@ -244,7 +244,10 @@ class DebugHandler:
             )
             return
         
-        await update.message.reply_text(STATUS_TESTING_NOTION)
+        await update.message.reply_text(
+            STATUS_TESTING_NOTION,
+            reply_markup=get_back_to_menu_keyboard()
+        )
         
         try:
             # Create combined service
@@ -299,5 +302,6 @@ class DebugHandler:
             await update.message.reply_text(
                 f"❌ Fehler beim Testen der Verbindung:\n\n"
                 f"`{str(e)}`\n\n"
-                "Überprüfe deine Notion-Konfiguration."
+                "Überprüfe deine Notion-Konfiguration.",
+                reply_markup=get_back_to_menu_keyboard()
             )
