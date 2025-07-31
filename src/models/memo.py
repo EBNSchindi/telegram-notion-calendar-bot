@@ -40,10 +40,23 @@ class Memo(BaseModel):
     @field_validator('aufgabe')
     @classmethod
     def validate_aufgabe(cls, v):
-        """Validate task title is not empty after stripping."""
+        """Validate task title is not empty after stripping and within length limits."""
         if not v.strip():
             raise ValueError("Aufgabe cannot be empty")
-        return v.strip()
+        
+        stripped_value = v.strip()
+        if len(stripped_value) > MAX_MEMO_TITLE_LENGTH:
+            raise ValueError(f"Aufgabe exceeds maximum length of {MAX_MEMO_TITLE_LENGTH} characters")
+        
+        return stripped_value
+    
+    @field_validator('notizen')
+    @classmethod
+    def validate_notizen(cls, v):
+        """Validate notes field length for security (DoS prevention)."""
+        if v is not None and len(v) > MAX_MEMO_NOTES_LENGTH:
+            raise ValueError(f"Notizen exceeds maximum length of {MAX_MEMO_NOTES_LENGTH} characters")
+        return v
     
     def to_notion_properties(self, timezone: str = "Europe/Berlin") -> dict:
         """Convert memo to Notion database properties."""
@@ -84,16 +97,16 @@ class Memo(BaseModel):
                 "multi_select": [{"name": self.projekt}]
             }
         
-        if self.notizen:
-            properties["Notizen"] = {
-                "rich_text": [
-                    {
-                        "text": {
-                            "content": self.notizen
-                        }
+        # Always include Notizen field, even if empty (fixes Issue #13)
+        properties["Notizen"] = {
+            "rich_text": [
+                {
+                    "text": {
+                        "content": self.notizen or ""
                     }
-                ]
-            }
+                }
+            ] if self.notizen else []
+        }
         
         return properties
     
@@ -154,7 +167,9 @@ class Memo(BaseModel):
         )
     
     def format_for_telegram(self, timezone: str = "Europe/Berlin") -> str:
-        """Format memo for Telegram display."""
+        """Format memo for Telegram display with proper XSS protection."""
+        from src.utils.security import InputSanitizer
+        
         # Status emoji
         status_emoji = {
             MEMO_STATUS_NOT_STARTED: "⭕",
@@ -164,8 +179,12 @@ class Memo(BaseModel):
         }
         emoji = status_emoji.get(self.status, "⭕")
         
-        formatted = f"{emoji} *{self.aufgabe}*\n"
-        formatted += f"📊 Status: {self.status}\n"
+        # Escape all text fields for Telegram markdown to prevent XSS
+        escaped_aufgabe = InputSanitizer.sanitize_telegram_markdown(self.aufgabe)
+        escaped_status = InputSanitizer.sanitize_telegram_markdown(self.status)
+        
+        formatted = f"{emoji} *{escaped_aufgabe}*\n"
+        formatted += f"📊 Status: {escaped_status}\n"
         
         if self.faelligkeitsdatum:
             tz = pytz.timezone(timezone)
@@ -173,12 +192,15 @@ class Memo(BaseModel):
             formatted += f"📅 Fällig: {local_date.strftime('%d.%m.%Y')}\n"
         
         if self.bereich:
-            formatted += f"🏷️ Bereich: {self.bereich}\n"
+            escaped_bereich = InputSanitizer.sanitize_telegram_markdown(self.bereich)
+            formatted += f"🏷️ Bereich: {escaped_bereich}\n"
         
         if self.projekt:
-            formatted += f"📁 Projekt: {self.projekt}\n"
+            escaped_projekt = InputSanitizer.sanitize_telegram_markdown(self.projekt)
+            formatted += f"📁 Projekt: {escaped_projekt}\n"
         
         if self.notizen:
-            formatted += f"📝 Notizen: {self.notizen}\n"
+            escaped_notizen = InputSanitizer.sanitize_telegram_markdown(self.notizen)
+            formatted += f"📝 Notizen: {escaped_notizen}\n"
         
         return formatted

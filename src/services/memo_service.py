@@ -5,6 +5,7 @@ from notion_client.errors import APIResponseError
 from src.models.memo import Memo
 from config.user_config import UserConfig
 from src.utils.error_handler import BotError, ErrorType, ErrorSeverity, handle_bot_error
+from src.utils.security import InputSanitizer
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,17 @@ class MemoService:
                 ErrorSeverity.HIGH
             )
         
+        # Validate Notion IDs to prevent injection
+        try:
+            self.database_id = InputSanitizer.validate_notion_id(memo_database_id)
+        except ValueError as e:
+            raise BotError(
+                str(e),
+                ErrorType.VALIDATION,
+                ErrorSeverity.HIGH
+            )
+        
         self.client = Client(auth=notion_api_key)
-        self.database_id = memo_database_id
     
     @classmethod
     def from_user_config(cls, user_config: UserConfig) -> 'MemoService':
@@ -61,7 +71,17 @@ class MemoService:
             BotError: If Notion API request fails
         """
         try:
-            properties = memo.to_notion_properties('Europe/Berlin')
+            # Sanitize memo content before sending to Notion
+            sanitized_memo = Memo(
+                aufgabe=InputSanitizer.sanitize_for_notion(memo.aufgabe),
+                status=memo.status,  # Status is validated by model
+                faelligkeitsdatum=memo.faelligkeitsdatum,
+                bereich=InputSanitizer.sanitize_for_notion(memo.bereich) if memo.bereich else None,
+                projekt=InputSanitizer.sanitize_for_notion(memo.projekt) if memo.projekt else None,
+                notizen=InputSanitizer.sanitize_for_notion(memo.notizen) if memo.notizen else None
+            )
+            
+            properties = sanitized_memo.to_notion_properties('Europe/Berlin')
             
             response = self.client.pages.create(
                 parent={"database_id": self.database_id},
@@ -105,16 +125,84 @@ class MemoService:
                 page_size=limit
             )
             
+            # Defensive programming: handle corrupted API responses
+            if not response:
+                logger.error("Received null response from Notion API")
+                raise BotError(
+                    "Received invalid response from Notion API",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültige API-Antwort."
+                )
+            
+            if not isinstance(response, dict):
+                logger.error(f"Response is not a dictionary: {type(response)}")
+                raise BotError(
+                    f"Invalid response format from Notion API: {type(response)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültiges Antwortformat."
+                )
+            
+            # Handle missing or malformed 'results' key
+            results = response.get("results")
+            if results is None:
+                logger.error("Response missing 'results' key")
+                raise BotError(
+                    "Response missing 'results' key",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Unvollständige API-Antwort."
+                )
+            
+            if not isinstance(results, list):
+                logger.error(f"Results is not a list: {type(results)}")
+                raise BotError(
+                    f"Invalid results format from Notion API: {type(results)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Laden der Memos. Ungültiges Ergebnisformat."
+                )
+            
             memos = []
-            for page in response["results"]:
+            corrupted_pages = 0
+            
+            for i, page in enumerate(results):
                 try:
+                    # Validate page structure
+                    if not isinstance(page, dict):
+                        logger.warning(f"Page {i} is not a dictionary: {type(page)}")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'id' not in page:
+                        logger.warning(f"Page {i} missing 'id' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'properties' not in page:
+                        logger.warning(f"Page {page.get('id', 'unknown')} missing 'properties' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if not isinstance(page['properties'], dict):
+                        logger.warning(f"Page {page['id']} has invalid properties type: {type(page['properties'])}")
+                        corrupted_pages += 1
+                        continue
+                    
                     memo = Memo.from_notion_page(page)
                     memos.append(memo)
+                    
                 except Exception as e:
-                    logger.warning(f"Failed to parse memo from page {page['id']}: {e}")
+                    logger.warning(f"Failed to parse memo from page {page.get('id', 'unknown')}: {e}")
+                    corrupted_pages += 1
                     continue
             
-            logger.info(f"Retrieved {len(memos)} recent memos from Notion")
+            # Log corrupted pages for monitoring
+            if corrupted_pages > 0:
+                logger.warning(f"Encountered {corrupted_pages} corrupted pages out of {len(results)} total pages")
+            
+            logger.info(f"Retrieved {len(memos)} recent memos from Notion ({corrupted_pages} pages skipped)")
             return memos
             
         except APIResponseError as e:
@@ -143,7 +231,7 @@ class MemoService:
                 database_id=self.database_id,
                 filter={
                     "property": "Status",
-                    "select": {
+                    "status": {
                         "equals": status
                     }
                 },
@@ -156,16 +244,84 @@ class MemoService:
                 page_size=limit
             )
             
+            # Defensive programming: handle corrupted API responses
+            if not response:
+                logger.error("Received null response from Notion API for status filter")
+                raise BotError(
+                    "Received invalid response from Notion API",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Filtern der Memos. Ungültige API-Antwort."
+                )
+            
+            if not isinstance(response, dict):
+                logger.error(f"Response is not a dictionary for status filter: {type(response)}")
+                raise BotError(
+                    f"Invalid response format from Notion API: {type(response)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Filtern der Memos. Ungültiges Antwortformat."
+                )
+            
+            # Handle missing or malformed 'results' key
+            results = response.get("results")
+            if results is None:
+                logger.error("Response missing 'results' key for status filter")
+                raise BotError(
+                    "Response missing 'results' key",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Filtern der Memos. Unvollständige API-Antwort."
+                )
+            
+            if not isinstance(results, list):
+                logger.error(f"Results is not a list for status filter: {type(results)}")
+                raise BotError(
+                    f"Invalid results format from Notion API: {type(results)}",
+                    ErrorType.NOTION_API,
+                    ErrorSeverity.MEDIUM,
+                    user_message="📝 Fehler beim Filtern der Memos. Ungültiges Ergebnisformat."
+                )
+            
             memos = []
-            for page in response["results"]:
+            corrupted_pages = 0
+            
+            for i, page in enumerate(results):
                 try:
+                    # Validate page structure
+                    if not isinstance(page, dict):
+                        logger.warning(f"Page {i} is not a dictionary: {type(page)}")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'id' not in page:
+                        logger.warning(f"Page {i} missing 'id' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if 'properties' not in page:
+                        logger.warning(f"Page {page.get('id', 'unknown')} missing 'properties' field")
+                        corrupted_pages += 1
+                        continue
+                    
+                    if not isinstance(page['properties'], dict):
+                        logger.warning(f"Page {page['id']} has invalid properties type: {type(page['properties'])}")
+                        corrupted_pages += 1
+                        continue
+                    
                     memo = Memo.from_notion_page(page)
                     memos.append(memo)
+                    
                 except Exception as e:
-                    logger.warning(f"Failed to parse memo from page {page['id']}: {e}")
+                    logger.warning(f"Failed to parse memo from page {page.get('id', 'unknown')}: {e}")
+                    corrupted_pages += 1
                     continue
             
-            logger.info(f"Retrieved {len(memos)} memos with status '{status}' from Notion")
+            # Log corrupted pages for monitoring
+            if corrupted_pages > 0:
+                logger.warning(f"Encountered {corrupted_pages} corrupted pages out of {len(results)} total pages for status '{status}'")
+            
+            logger.info(f"Retrieved {len(memos)} memos with status '{status}' from Notion ({corrupted_pages} pages skipped)")
             return memos
             
         except APIResponseError as e:

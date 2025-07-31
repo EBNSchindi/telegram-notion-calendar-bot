@@ -4,6 +4,7 @@ import json
 from typing import Dict, Optional
 from dataclasses import dataclass
 import logging
+from src.utils.security import SecureConfig, InputSanitizer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class UserConfigManager:
     def __init__(self, config_file: str = 'users_config.json'):
         self.config_file = config_file
         self._users: Dict[int, UserConfig] = {}
+        self._secure_config = SecureConfig()  # Initialize encryption
         self._load_from_env()  # Load from environment for backward compatibility
         self._load_from_file()
     
@@ -48,14 +50,14 @@ class UserConfigManager:
             default_user = UserConfig(
                 telegram_user_id=0,  # Will be updated on first message
                 telegram_username='default',
-                notion_api_key=os.getenv('NOTION_API_KEY', ''),
-                notion_database_id=os.getenv('NOTION_DATABASE_ID', ''),
-                teamspace_owner_api_key=os.getenv('TEAMSPACE_OWNER_API_KEY', ''),
-                is_owner=os.getenv('IS_TEAMSPACE_OWNER', 'false').lower() == 'true',
-                timezone=os.getenv('TIMEZONE', 'Europe/Berlin'),
-                language=os.getenv('LANGUAGE', 'de'),
-                reminder_time=os.getenv('REMINDER_TIME', '08:00'),
-                reminder_enabled=os.getenv('REMINDER_ENABLED', 'true').lower() == 'true'
+                notion_api_key=self._secure_config.secure_env_var('NOTION_API_KEY', ''),
+                notion_database_id=self._secure_config.secure_env_var('NOTION_DATABASE_ID', ''),
+                teamspace_owner_api_key=self._secure_config.secure_env_var('TEAMSPACE_OWNER_API_KEY', ''),
+                is_owner=self._secure_config.secure_env_var('IS_TEAMSPACE_OWNER', 'false').lower() == 'true',
+                timezone=self._secure_config.secure_env_var('TIMEZONE', 'Europe/Berlin'),
+                language=self._secure_config.secure_env_var('LANGUAGE', 'de'),
+                reminder_time=self._secure_config.secure_env_var('REMINDER_TIME', '08:00'),
+                reminder_enabled=self._secure_config.secure_env_var('REMINDER_ENABLED', 'true').lower() == 'true'
             )
             self._users[0] = default_user
             logger.info("Loaded default user config from environment variables")
@@ -69,6 +71,24 @@ class UserConfigManager:
                     for user_data in data.get('users', []):
                         # Filter out comment fields that start with underscore
                         filtered_data = {k: v for k, v in user_data.items() if not k.startswith('_')}
+                        
+                        # Decrypt sensitive fields
+                        if 'notion_api_key_encrypted' in filtered_data:
+                            # New encrypted format
+                            filtered_data['notion_api_key'] = self._secure_config.decrypt_credential(
+                                filtered_data.pop('notion_api_key_encrypted')
+                            )
+                        
+                        if 'teamspace_owner_api_key_encrypted' in filtered_data:
+                            filtered_data['teamspace_owner_api_key'] = self._secure_config.decrypt_credential(
+                                filtered_data.pop('teamspace_owner_api_key_encrypted')
+                            )
+                        
+                        # Validate and sanitize user ID
+                        filtered_data['telegram_user_id'] = InputSanitizer.validate_telegram_user_id(
+                            filtered_data['telegram_user_id']
+                        )
+                        
                         user = UserConfig(**filtered_data)
                         self._users[user.telegram_user_id] = user
                 logger.info(f"Loaded {len(self._users)} user configurations")
@@ -79,26 +99,34 @@ class UserConfigManager:
         """Save current user configurations to file."""
         try:
             data = {
-                'users': [
-                    {
+                'users': []
+            }
+            
+            for user in self._users.values():
+                if user.telegram_user_id != 0:  # Skip default user
+                    user_data = {
                         'telegram_user_id': user.telegram_user_id,
                         'telegram_username': user.telegram_username,
-                        'notion_api_key': user.notion_api_key,
+                        # Encrypt sensitive fields
+                        'notion_api_key_encrypted': self._secure_config.encrypt_credential(user.notion_api_key),
                         'notion_database_id': user.notion_database_id,
                         'shared_notion_database_id': user.shared_notion_database_id,
                         'business_notion_database_id': user.business_notion_database_id,
                         'memo_database_id': user.memo_database_id,
-                        'teamspace_owner_api_key': user.teamspace_owner_api_key,
                         'is_owner': user.is_owner,
                         'timezone': user.timezone,
                         'language': user.language,
                         'reminder_time': user.reminder_time,
                         'reminder_enabled': user.reminder_enabled
                     }
-                    for user in self._users.values()
-                    if user.telegram_user_id != 0  # Skip default user
-                ]
-            }
+                    
+                    # Only encrypt teamspace_owner_api_key if present
+                    if user.teamspace_owner_api_key:
+                        user_data['teamspace_owner_api_key_encrypted'] = self._secure_config.encrypt_credential(
+                            user.teamspace_owner_api_key
+                        )
+                    
+                    data['users'].append(user_data)
             with open(self.config_file, 'w') as f:
                 json.dump(data, f, indent=2)
             logger.info(f"Saved {len(data['users'])} user configurations")

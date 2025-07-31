@@ -267,11 +267,21 @@ Der Bot startet mit einem vereinfachten 2x2+1 Menü:
 | Befehl | Beschreibung |
 |--------|-------------|
 | `/start` | Hauptmenü öffnen |
-| `/today` | Heutige Termine |
-| `/tomorrow` | Morgige Termine |
-| `/list` | Alle kommenden Termine |
-| `/reminder on/off` | Erinnerungen verwalten |
-| `/help` | Vollständige Hilfe |
+| `/menu` | Hauptmenü öffnen (Alias für /start) |
+| `/today` | Heutige Termine anzeigen |
+| `/tomorrow` | Morgige Termine anzeigen |
+| `/add` | Neuen Termin hinzufügen |
+| `/list` | Alle kommenden Termine anzeigen |
+| `/reminder` | Erinnerungen verwalten (on/off/time/test/preview) |
+| `/help` | Vollständige Hilfe anzeigen |
+
+### Debug-Befehle (für Troubleshooting)
+| Befehl | Beschreibung |
+|--------|-------------|
+| `/test_time` | Zeitformat testen |
+| `/formats` | Unterstützte Zeitformate anzeigen |
+| `/validate` | Termineingabe validieren |
+| `/test_notion` | Notion-Verbindung testen |
 
 ## 🧑‍💻 Development
 

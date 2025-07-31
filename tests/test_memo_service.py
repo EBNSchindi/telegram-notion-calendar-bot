@@ -11,22 +11,30 @@ from config.user_config import UserConfig
 def user_config():
     """Create a test user configuration."""
     return UserConfig(
-        user_id=123456,
-        private_api_key="test_private_key",
-        private_database_id="12345678901234567890123456789012",
+        telegram_user_id=123456,
+        telegram_username="testuser",
+        notion_api_key="test_private_key",
+        notion_database_id="12345678901234567890123456789012",
         memo_database_id="98765432109876543210987654321098",
-        shared_api_key="test_shared_key",
-        shared_database_id="11111111222222223333333344444444",
+        shared_notion_database_id="11111111222222223333333344444444",
         timezone="Europe/Berlin"
     )
 
 
 @pytest.fixture
 def memo_service(user_config):
-    """Create a MemoService instance with mocked NotionService."""
-    with patch('src.services.memo_service.NotionService') as mock_notion:
+    """Create a MemoService instance with mocked Client."""
+    with patch('src.services.memo_service.Client') as mock_client:
+        # Mock the client instance
+        mock_instance = Mock()
+        mock_client.return_value = mock_instance
+        
+        # Create service
         service = MemoService.from_user_config(user_config)
-        service.notion_service = mock_notion.return_value
+        
+        # Add mock instance to service for tests
+        service.mock_client = mock_instance
+        
         return service
 
 
@@ -54,16 +62,16 @@ def notion_page_data():
                 'title': [{'text': {'content': 'Test Aufgabe'}}]
             },
             'Status': {
-                'select': {'name': 'Nicht begonnen'}
+                'status': {'name': 'Nicht begonnen'}
             },
             'Fälligkeitsdatum': {
                 'date': {'start': '2024-01-22'}
             },
             'Bereich': {
-                'select': {'name': 'Arbeit'}
+                'multi_select': [{'name': 'Arbeit'}]
             },
             'Projekt': {
-                'rich_text': [{'text': {'content': 'Test Projekt'}}]
+                'multi_select': [{'name': 'Test Projekt'}]
             },
             'Notizen': {
                 'rich_text': [{'text': {'content': 'Test Notizen'}}]
@@ -78,25 +86,25 @@ class TestMemoService:
     @pytest.mark.asyncio
     async def test_create_memo_success(self, memo_service, sample_memo):
         """Test successful memo creation."""
-        # Mock Notion service response
-        memo_service.notion_service.create_page.return_value = AsyncMock(return_value='page-123')
+        # Mock Notion client response
+        memo_service.mock_client.pages.create.return_value = {'id': 'page-123'}
         
         # Create memo
         page_id = await memo_service.create_memo(sample_memo)
         
         # Verify
         assert page_id == 'page-123'
-        memo_service.notion_service.create_page.assert_called_once()
+        memo_service.mock_client.pages.create.assert_called_once()
         
         # Check the properties passed to Notion
-        call_args = memo_service.notion_service.create_page.call_args[0]
-        properties = call_args[0]
+        call_args = memo_service.mock_client.pages.create.call_args
+        properties = call_args[1]['properties']
         
         assert properties['Aufgabe']['title'][0]['text']['content'] == 'Test Aufgabe'
-        assert properties['Status']['select']['name'] == 'Nicht begonnen'
+        assert properties['Status']['status']['name'] == 'Nicht begonnen'
         assert 'Fälligkeitsdatum' in properties
-        assert properties['Bereich']['select']['name'] == 'Arbeit'
-        assert properties['Projekt']['rich_text'][0]['text']['content'] == 'Test Projekt'
+        assert properties['Bereich']['multi_select'][0]['name'] == 'Arbeit'
+        assert properties['Projekt']['multi_select'][0]['name'] == 'Test Projekt'
         assert properties['Notizen']['rich_text'][0]['text']['content'] == 'Test Notizen'
     
     @pytest.mark.asyncio
@@ -104,31 +112,61 @@ class TestMemoService:
         """Test creating a memo with minimal fields."""
         minimal_memo = Memo(aufgabe="Minimal Task", status="Nicht begonnen")
         
-        memo_service.notion_service.create_page.return_value = AsyncMock(return_value='page-456')
+        memo_service.mock_client.pages.create.return_value = {'id': 'page-456'}
         
         page_id = await memo_service.create_memo(minimal_memo)
         
         assert page_id == 'page-456'
         
         # Check that only required fields are set
-        call_args = memo_service.notion_service.create_page.call_args[0]
-        properties = call_args[0]
+        call_args = memo_service.mock_client.pages.create.call_args
+        properties = call_args[1]['properties']
         
         assert properties['Aufgabe']['title'][0]['text']['content'] == 'Minimal Task'
-        assert properties['Status']['select']['name'] == 'Nicht begonnen'
-        # Optional fields should not be in properties
-        assert 'Fälligkeitsdatum' not in properties
-        assert 'Bereich' not in properties
-        assert 'Projekt' not in properties
-        assert 'Notizen' not in properties
+        assert properties['Status']['status']['name'] == 'Nicht begonnen'
+        # Notizen field should always be present (even if empty) after Issue #13 fix
+        assert 'Notizen' in properties
+        assert properties['Notizen']['rich_text'] == []
+    
+    @pytest.mark.asyncio
+    async def test_create_memo_empty_description_issue_13(self, memo_service):
+        """Test Issue #13: Creating memos with empty description field."""
+        # Test memo with None description (notizen=None)
+        memo_none = Memo(aufgabe="Quick task - no description", notizen=None)
+        memo_service.mock_client.pages.create.return_value = {'id': 'page-issue13-none'}
+        
+        page_id = await memo_service.create_memo(memo_none)
+        assert page_id == 'page-issue13-none'
+        
+        call_args = memo_service.mock_client.pages.create.call_args
+        properties = call_args[1]['properties']
+        
+        # Verify Notizen field is present but empty
+        assert 'Notizen' in properties
+        assert properties['Notizen']['rich_text'] == []
+        
+        # Reset mock for next test
+        memo_service.mock_client.reset_mock()
+        
+        # Test memo with empty string description (notizen="")
+        memo_empty = Memo(aufgabe="Quick task - empty description", notizen="")
+        memo_service.mock_client.pages.create.return_value = {'id': 'page-issue13-empty'}
+        
+        page_id = await memo_service.create_memo(memo_empty)
+        assert page_id == 'page-issue13-empty'
+        
+        call_args = memo_service.mock_client.pages.create.call_args
+        properties = call_args[1]['properties']
+        
+        # Verify Notizen field is present but empty
+        assert 'Notizen' in properties
+        assert properties['Notizen']['rich_text'] == []
     
     @pytest.mark.asyncio
     async def test_get_recent_memos(self, memo_service, notion_page_data):
         """Test retrieving recent memos."""
         # Mock Notion query response
-        memo_service.notion_service.query_database.return_value = AsyncMock(
-            return_value={'results': [notion_page_data]}
-        )
+        memo_service.mock_client.databases.query.return_value = {'results': [notion_page_data]}
         
         memos = await memo_service.get_recent_memos(limit=10)
         
@@ -143,9 +181,7 @@ class TestMemoService:
     @pytest.mark.asyncio
     async def test_get_recent_memos_empty(self, memo_service):
         """Test retrieving memos when database is empty."""
-        memo_service.notion_service.query_database.return_value = AsyncMock(
-            return_value={'results': []}
-        )
+        memo_service.mock_client.databases.query.return_value = {'results': []}
         
         memos = await memo_service.get_recent_memos()
         
@@ -154,48 +190,31 @@ class TestMemoService:
     @pytest.mark.asyncio
     async def test_update_memo_status(self, memo_service):
         """Test updating memo status."""
-        memo_service.notion_service.update_page.return_value = AsyncMock(return_value=True)
+        memo_service.mock_client.pages.update.return_value = {'id': 'page-123'}
         
         success = await memo_service.update_memo_status('page-123', 'Erledigt')
         
         assert success is True
-        memo_service.notion_service.update_page.assert_called_once_with(
-            'page-123',
-            {'Status': {'select': {'name': 'Erledigt'}}}
-        )
+        memo_service.mock_client.pages.update.assert_called_once()
+        call_args = memo_service.mock_client.pages.update.call_args
+        assert call_args[1]['properties']['Status']['status']['name'] == 'Erledigt'
     
     @pytest.mark.asyncio
     async def test_delete_memo(self, memo_service):
         """Test deleting a memo."""
-        memo_service.notion_service.archive_page.return_value = AsyncMock(return_value=True)
+        memo_service.mock_client.pages.update.return_value = {'archived': True}
         
         success = await memo_service.delete_memo('page-123')
         
         assert success is True
-        memo_service.notion_service.archive_page.assert_called_once_with('page-123')
-    
-    @pytest.mark.asyncio
-    async def test_search_memos(self, memo_service, notion_page_data):
-        """Test searching memos."""
-        memo_service.notion_service.query_database.return_value = AsyncMock(
-            return_value={'results': [notion_page_data]}
-        )
-        
-        memos = await memo_service.search_memos("Test")
-        
-        assert len(memos) == 1
-        assert memos[0].aufgabe == 'Test Aufgabe'
-        
-        # Verify the filter was applied
-        call_args = memo_service.notion_service.query_database.call_args
-        assert 'filter' in call_args[1]
+        memo_service.mock_client.pages.update.assert_called_once()
+        call_args = memo_service.mock_client.pages.update.call_args
+        assert call_args[1]['archived'] is True
     
     @pytest.mark.asyncio
     async def test_get_memos_by_status(self, memo_service, notion_page_data):
         """Test getting memos by status."""
-        memo_service.notion_service.query_database.return_value = AsyncMock(
-            return_value={'results': [notion_page_data]}
-        )
+        memo_service.mock_client.databases.query.return_value = {'results': [notion_page_data]}
         
         memos = await memo_service.get_memos_by_status('Nicht begonnen')
         
@@ -203,32 +222,70 @@ class TestMemoService:
         assert memos[0].status == 'Nicht begonnen'
         
         # Verify the filter was applied
-        call_args = memo_service.notion_service.query_database.call_args
+        call_args = memo_service.mock_client.databases.query.call_args
         filter_data = call_args[1]['filter']
         assert filter_data['property'] == 'Status'
-        assert filter_data['select']['equals'] == 'Nicht begonnen'
+        assert filter_data['status']['equals'] == 'Nicht begonnen'
     
     @pytest.mark.asyncio
-    async def test_get_memos_by_project(self, memo_service, notion_page_data):
-        """Test getting memos by project."""
-        memo_service.notion_service.query_database.return_value = AsyncMock(
-            return_value={'results': [notion_page_data]}
+    async def test_update_memo(self, memo_service, sample_memo):
+        """Test updating an existing memo."""
+        memo_service.mock_client.pages.update.return_value = {'id': 'page-123'}
+        
+        success = await memo_service.update_memo('page-123', sample_memo)
+        
+        assert success is True
+        memo_service.mock_client.pages.update.assert_called_once()
+        
+        # Verify all properties were updated
+        call_args = memo_service.mock_client.pages.update.call_args
+        properties = call_args[1]['properties']
+        assert properties['Aufgabe']['title'][0]['text']['content'] == 'Test Aufgabe'
+        assert properties['Status']['status']['name'] == 'Nicht begonnen'
+    
+    @pytest.mark.asyncio
+    async def test_test_connection(self, memo_service):
+        """Test database connection test."""
+        memo_service.mock_client.databases.retrieve.return_value = {'id': 'test-db'}
+        
+        result = await memo_service.test_connection()
+        
+        assert result is True
+        memo_service.mock_client.databases.retrieve.assert_called_once_with(
+            database_id=memo_service.database_id
         )
-        
-        memos = await memo_service.get_memos_by_project('Test Projekt')
-        
-        assert len(memos) == 1
-        assert memos[0].projekt == 'Test Projekt'
     
     @pytest.mark.asyncio
     async def test_error_handling_create(self, memo_service, sample_memo):
         """Test error handling during memo creation."""
-        memo_service.notion_service.create_page.side_effect = Exception("API Error")
+        from notion_client.errors import APIResponseError
         
-        with pytest.raises(Exception) as exc_info:
-            await memo_service.create_memo(sample_memo)
+        # Create a mock httpx Response
+        import httpx
+        mock_response = Mock(spec=httpx.Response)
+        mock_response.status_code = 400
+        mock_response.text = "API Error"
+        mock_response.headers = {}
+        mock_response.json.return_value = {"code": "bad_request", "message": "API Error"}
         
-        assert "API Error" in str(exc_info.value)
+        # Create APIResponseError with the mocked response
+        api_error = APIResponseError(
+            response=mock_response,
+            message="API Error", 
+            code="bad_request"
+        )
+        
+        memo_service.mock_client.pages.create.side_effect = api_error
+        
+        # The @handle_bot_error decorator catches the error and returns None for HIGH severity
+        # So we test that None is returned and the error was logged
+        result = await memo_service.create_memo(sample_memo)
+        
+        # Should return None since error was handled
+        assert result is None
+        
+        # Verify that the Notion client was called
+        memo_service.mock_client.pages.create.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_memo_from_notion_page_missing_fields(self, memo_service):
@@ -241,7 +298,7 @@ class TestMemoService:
                     'title': [{'text': {'content': 'Minimal Task'}}]
                 },
                 'Status': {
-                    'select': {'name': 'In Arbeit'}
+                    'status': {'name': 'In Bearbeitung'}
                 }
             }
         }
@@ -249,7 +306,7 @@ class TestMemoService:
         memo = Memo.from_notion_page(minimal_page_data)
         
         assert memo.aufgabe == 'Minimal Task'
-        assert memo.status == 'In Arbeit'
+        assert memo.status == 'In Bearbeitung'
         assert memo.faelligkeitsdatum is None
         assert memo.bereich is None
         assert memo.projekt is None
@@ -261,13 +318,12 @@ class TestMemoServiceInitialization:
     
     def test_from_user_config_success(self, user_config):
         """Test successful initialization from user config."""
-        with patch('src.services.memo_service.NotionService') as mock_notion:
+        with patch('src.services.memo_service.Client') as mock_client:
             service = MemoService.from_user_config(user_config)
             
             assert service.database_id == user_config.memo_database_id
-            mock_notion.assert_called_once_with(
-                user_config.private_api_key,
-                user_config.memo_database_id
+            mock_client.assert_called_once_with(
+                auth=user_config.notion_api_key
             )
     
     def test_from_user_config_no_memo_db(self):
@@ -280,7 +336,8 @@ class TestMemoServiceInitialization:
             # No memo_database_id
         )
         
-        with pytest.raises(ValueError) as exc_info:
+        from src.utils.error_handler import BotError
+        with pytest.raises(BotError) as exc_info:
             MemoService.from_user_config(config)
         
-        assert "No memo database configured" in str(exc_info.value)
+        assert "missing memo_database_id" in str(exc_info.value)

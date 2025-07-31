@@ -216,3 +216,48 @@ test_*.sh
 *.iws
 *.ipr
 out/
+
+
+
+# Claude Flow generated files
+.claude/settings.local.json
+.mcp.json
+claude-flow.config.json
+.swarm/
+.hive-mind/
+memory/claude-flow-data.json
+memory/sessions/*
+!memory/sessions/README.md
+memory/agents/*
+!memory/agents/README.md
+coordination/memory_bank/*
+coordination/subtasks/*
+coordination/orchestration/*
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+claude-flow
+claude-flow.bat
+claude-flow.ps1
+hive-mind-prompt-*.txt
+
+# Claude AI specific  
+.claude/
+*.claude
+claude-session.json
+CLAUDE.md
+
+# Test artifacts
+edge_case_tests.md
+test_failure_report.md
+workflow_test_results.md
+manual_test_report.*
+final_memo_test.py
+tests/HIVE_MIND_ANALYSIS.md
+tests/run_api_integration_tests.py
+
+# Test environment
+.env.test
