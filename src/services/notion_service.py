@@ -97,14 +97,34 @@ class NotionService:
             List[Appointment]: List of appointments
         """
         try:
+            # Try to query with sorting, but handle errors gracefully
+            sort_property = None
+            sorts = []
+            
+            # Try different sort properties in order of preference
+            for prop in ["Startdatum", "Datum", "Date"]:
+                try:
+                    test_response = self.client.databases.query(
+                        database_id=self.database_id,
+                        sorts=[{"property": prop, "direction": "ascending"}],
+                        page_size=1
+                    )
+                    # If successful, use this property for sorting
+                    sort_property = prop
+                    sorts = [{"property": prop, "direction": "ascending"}]
+                    logger.debug(f"Using sort property: {prop}")
+                    break
+                except Exception as e:
+                    logger.debug(f"Sort property {prop} not available: {e}")
+                    continue
+            
+            # If no sort property works, query without sorting
+            if not sorts:
+                logger.warning("No valid sort property found, querying without sorting")
+            
             response = self.client.databases.query(
                 database_id=self.database_id,
-                sorts=[
-                    {
-                        "property": "Datum",  # Updated to match your database field
-                        "direction": "ascending"
-                    }
-                ],
+                sorts=sorts,
                 page_size=limit
             )
             

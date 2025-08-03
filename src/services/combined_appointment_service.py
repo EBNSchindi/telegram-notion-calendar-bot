@@ -224,16 +224,27 @@ class CombinedAppointmentService:
                     sync_service = PartnerSyncService(self.user_config_manager)
                     appointment.notion_page_id = page_id  # Set the page ID for sync
                     
-                    # Sync immediately
-                    await sync_service.sync_single_appointment(
+                    # Sync immediately with retry mechanism
+                    logger.info(f"Attempting to sync partner-relevant appointment {page_id} to shared database")
+                    sync_result = await sync_service.sync_single_appointment(
                         appointment, 
                         self.user_config,
                         force_sync=True
                     )
-                    logger.info(f"Automatically synced partner-relevant appointment {page_id} to shared database")
+                    
+                    if sync_result["success"]:
+                        logger.info(
+                            f"Successfully synced appointment {page_id} to shared database. "
+                            f"Action: {sync_result['action']}, Shared ID: {sync_result.get('shared_id')}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Failed to sync appointment {page_id} to shared database. "
+                            f"Error: {sync_result.get('error', 'Unknown error')}"
+                        )
                     
                 except Exception as e:
-                    logger.error(f"Error during immediate partner sync: {e}")
+                    logger.error(f"Error during immediate partner sync (after retries exhausted): {e}")
                     # Don't fail the appointment creation if sync fails
         
         return page_id

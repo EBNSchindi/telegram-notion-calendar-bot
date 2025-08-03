@@ -53,7 +53,9 @@ Jeder User benötigt eine eigene private Datenbank:
 | Property Name | Type | Erforderlich | Beschreibung |
 |---------------|------|-------------|-------------|
 | **Name** | Title | ✅ | Terminbezeichnung |
-| **Datum** | Date | ✅ | Termin Datum/Zeit (mit Zeit-Support) |
+| **Startdatum** | Date | ✅ | Startzeit des Termins (mit Zeit-Support) |
+| **Endedatum** | Date | ✅ | Endzeit des Termins (mit Zeit-Support) |
+| **Datum** | Date | ❌ | Legacy-Feld (optional für Abwärtskompatibilität) |
 | **Beschreibung** | Text | ❌ | Detaillierte Beschreibung |
 | **Ort** | Text | ❌ | Terminort (für AI-Features) |
 | **Tags** | Text | ❌ | Komma-separierte Tags |
@@ -319,8 +321,9 @@ Für **automatische E-Mail-Synchronisation**:
 
 **Lösung**:
 1. Überprüfen Sie die Feldnamen (Groß-/Kleinschreibung!)
-2. **Erforderlich**: Name (Title), Datum (Date), PartnerRelevant (Checkbox)
-3. **Optional**: Beschreibung, Ort, Tags, OutlookID, Organizer
+2. **Erforderlich**: Name (Title), Startdatum (Date), Endedatum (Date), PartnerRelevant (Checkbox)
+3. **Optional**: Datum (Legacy), Beschreibung, Ort, Tags, OutlookID, Organizer
+4. **Hinweis**: Bei Upgrade von Version 2.x siehe [Migration Guide](MIGRATION_GUIDE.md)
 
 ### \"No valid users configured\"
 
@@ -350,7 +353,8 @@ Für **automatische E-Mail-Synchronisation**:
 | Property | Type | Notion-Beispiel | Beschreibung |
 |----------|------|----------------|-------------|
 | **Name** | Title | \"Team Meeting\" | Termintitel - automatisch befüllt |
-| **Datum** | Date | 2024-06-15 14:30 | Datum + Zeit - **Zeit-Support aktivieren!** |
+| **Startdatum** | Date | 2024-06-15 14:30 | Startzeit - **Zeit-Support aktivieren!** |
+| **Endedatum** | Date | 2024-06-15 15:30 | Endzeit - **Zeit-Support aktivieren!** |
 
 ### Optionale Properties
 
@@ -362,10 +366,14 @@ Für **automatische E-Mail-Synchronisation**:
 
 ### Property-Einstellungen
 
-#### Datum-Property
-- ✅ **\"Include time\"** aktivieren
+#### Datum-Properties (Startdatum & Endedatum)
+- ✅ **\"Include time\"** aktivieren für beide Felder
 - ✅ **Timezone** auf Ihre lokale Zeit setzen
 - ✅ **Format**: \"June 15, 2024 2:30 PM\"
+
+#### Legacy Datum-Property (optional)
+- ❌ Kann beibehalten werden für Abwärtskompatibilität
+- ❌ Neue Termine verwenden automatisch Startdatum/Endedatum
 
 #### Text-Properties
 - ✅ **Standard-Text-Felder** verwenden
@@ -418,5 +426,5 @@ Für **automatische E-Mail-Synchronisation**:
 
 ---
 
-*Letzte Aktualisierung: 2024-06-15*  
-*Version: 2.0.0 - Multi-User Setup mit Business Email Integration*
+*Letzte Aktualisierung: 2025-01-21*  
+*Version: 3.1.0 - Multi-User Setup mit separaten Start-/End-Datum Feldern*

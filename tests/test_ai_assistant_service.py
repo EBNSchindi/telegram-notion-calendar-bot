@@ -35,9 +35,26 @@ def mock_ai_response():
         "title": "Zahnarzttermin",
         "date": "2024-01-25",
         "time": "15:30",
+        "duration_minutes": 60,
         "description": "Kontrolluntersuchung",
         "location": "Zahnarztpraxis Dr. Schmidt",
         "confidence": 0.9
+    })
+    return mock_response
+
+
+@pytest.fixture
+def mock_ai_response_with_duration():
+    """Create a mock AI response with custom duration."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = json.dumps({
+        "title": "Team Meeting",
+        "date": "2024-01-25",
+        "time": "14:00",
+        "duration_minutes": 120,
+        "description": "Quarterly review",
+        "confidence": 0.95
     })
     return mock_response
 
@@ -204,11 +221,12 @@ class TestAIAssistantService:
         """Test appointment data validation."""
         service, _ = ai_service_with_client
         
-        # Valid data
+        # Valid data with duration
         data = {
             'title': 'Test Appointment',
             'date': '2024-01-25',
             'time': '14:30',
+            'duration_minutes': 90,
             'description': 'Test description',
             'location': 'Test location'
         }
@@ -218,6 +236,7 @@ class TestAIAssistantService:
         assert validated['title'] == 'Test Appointment'
         assert validated['date'] == '2024-01-25'
         assert validated['time'] == '14:30'
+        assert validated['duration_minutes'] == 90
         
         # Invalid time format
         data['time'] = '25:99'
@@ -228,6 +247,52 @@ class TestAIAssistantService:
         data = {'date': '2024-01-25'}
         validated = await service.validate_appointment_data(data)
         assert validated['title'] == 'Neuer Termin'  # Default title
+        assert validated['duration_minutes'] == 60  # Default duration
+    
+    @pytest.mark.asyncio
+    async def test_validate_duration_boundaries(self, ai_service_with_client):
+        """Test duration validation boundaries."""
+        service, _ = ai_service_with_client
+        
+        # Test too small duration
+        data = {
+            'title': 'Quick Task',
+            'date': '2024-01-25',
+            'duration_minutes': 3  # Less than 5 minutes
+        }
+        validated = await service.validate_appointment_data(data)
+        assert validated['duration_minutes'] == 60  # Should default to 60
+        
+        # Test too large duration
+        data['duration_minutes'] = 1500  # More than 24 hours
+        validated = await service.validate_appointment_data(data)
+        assert validated['duration_minutes'] == 1440  # Should cap at 24 hours
+        
+        # Test valid durations
+        for duration in [5, 30, 60, 120, 1440]:
+            data['duration_minutes'] = duration
+            validated = await service.validate_appointment_data(data)
+            assert validated['duration_minutes'] == duration
+    
+    @pytest.mark.asyncio
+    async def test_validate_duration_type_conversion(self, ai_service_with_client):
+        """Test duration type conversion."""
+        service, _ = ai_service_with_client
+        
+        # Test string to int conversion
+        data = {
+            'title': 'Meeting',
+            'date': '2024-01-25',
+            'duration_minutes': '90'  # String instead of int
+        }
+        validated = await service.validate_appointment_data(data)
+        assert validated['duration_minutes'] == 90
+        assert isinstance(validated['duration_minutes'], int)
+        
+        # Test invalid duration (non-numeric)
+        data['duration_minutes'] = 'invalid'
+        validated = await service.validate_appointment_data(data)
+        assert validated['duration_minutes'] == 60  # Default
     
     @pytest.mark.asyncio
     async def test_validate_memo_data(self, ai_service_with_client):
@@ -293,7 +358,7 @@ class TestAIAssistantService:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = """
         Here is the extracted data:
-        {"title": "Meeting", "date": "2024-01-25", "confidence": 0.9}
+        {"title": "Meeting", "date": "2024-01-25", "duration_minutes": 60, "confidence": 0.9}
         That's all!
         """
         
@@ -302,6 +367,146 @@ class TestAIAssistantService:
         
         result = await service.extract_appointment_from_text("Meeting tomorrow")
         
+        assert result is not None
+        assert result['title'] == 'Meeting'
+        assert result['duration_minutes'] == 60
+    
+    @pytest.mark.asyncio
+    async def test_json_extraction_with_code_block(self, ai_service_with_client):
+        """Test JSON extraction from markdown code block."""
+        service, mock_client = ai_service_with_client
+        
+        # Mock response with JSON in code block
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = """
+        Here's the extracted appointment:
+        ```json
+        {
+            "title": "Arzttermin",
+            "date": "2024-01-26",
+            "time": "10:00",
+            "duration_minutes": 30,
+            "confidence": 0.85
+        }
+        ```
+        Done!
+        """
+        
+        mock_create = AsyncMock(return_value=mock_response)
+        mock_client.chat.completions.create = mock_create
+        
+        result = await service.extract_appointment_from_text("Arzttermin morgen um 10")
+        
+        assert result is not None
+        assert result['title'] == 'Arzttermin'
+        assert result['duration_minutes'] == 30
+        assert result['time'] == '10:00'
+    
+    @pytest.mark.asyncio
+    async def test_json_extraction_multiple_objects(self, ai_service_with_client):
+        """Test JSON extraction with multiple JSON objects (should extract first)."""
+        service, mock_client = ai_service_with_client
+        
+        # Mock response with multiple JSON objects
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = """
+        First appointment:
+        {"title": "Meeting 1", "date": "2024-01-25", "duration_minutes": 60, "confidence": 0.9}
+        Second appointment:
+        {"title": "Meeting 2", "date": "2024-01-26", "duration_minutes": 90, "confidence": 0.8}
+        """
+        
+        mock_create = AsyncMock(return_value=mock_response)
+        mock_client.chat.completions.create = mock_create
+        
+        result = await service.extract_appointment_from_text("Two meetings")
+        
+        assert result is not None
+        assert result['title'] == 'Meeting 1'  # Should extract first valid JSON
+        assert result['duration_minutes'] == 60
+    
+    @pytest.mark.asyncio
+    async def test_duration_extraction_german_patterns(self, ai_service_with_client, mock_ai_response_with_duration):
+        """Test duration extraction from German patterns."""
+        service, mock_client = ai_service_with_client
+        
+        # Test various German duration patterns
+        test_cases = [
+            ("30 min", 30),
+            ("1 Stunde", 60),
+            ("2 Stunden", 120),
+            ("halbe Stunde", 30),
+            ("anderthalb Stunden", 90),
+            ("1.5h", 90),
+            ("2,5 Stunden", 150)
+        ]
+        
+        for pattern, expected_duration in test_cases:
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = json.dumps({
+                "title": "Test Termin",
+                "date": "2024-01-25",
+                "time": "14:00",
+                "duration_minutes": expected_duration,
+                "confidence": 0.9
+            })
+            
+            mock_create = AsyncMock(return_value=mock_response)
+            mock_client.chat.completions.create = mock_create
+            
+            result = await service.extract_appointment_from_text(f"Termin morgen für {pattern}")
+            
+            assert result is not None
+            assert result['duration_minutes'] == expected_duration
+    
+    @pytest.mark.asyncio
+    async def test_duration_default_when_not_specified(self, ai_service_with_client):
+        """Test default duration when not specified."""
+        service, mock_client = ai_service_with_client
+        
+        # Mock response without duration_minutes
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({
+            "title": "Quick Meeting",
+            "date": "2024-01-25",
+            "time": "15:00",
+            "confidence": 0.85
+        })
+        
+        mock_create = AsyncMock(return_value=mock_response)
+        mock_client.chat.completions.create = mock_create
+        
+        result = await service.extract_appointment_from_text("Quick meeting tomorrow at 3pm")
+        
+        assert result is not None
+        assert result['duration_minutes'] == 60  # Default duration
+    
+    @pytest.mark.asyncio
+    async def test_malformed_json_error_handling(self, ai_service_with_client):
+        """Test error handling for malformed JSON responses."""
+        service, mock_client = ai_service_with_client
+        
+        # Mock response with malformed JSON
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = """
+        {
+            "title": "Meeting",
+            "date": "2024-01-25",
+            "confidence": 0.9
+        } extra text here causing error
+        """
+        
+        mock_create = AsyncMock(return_value=mock_response)
+        mock_client.chat.completions.create = mock_create
+        
+        result = await service.extract_appointment_from_text("Meeting tomorrow")
+        
+        # Should still extract valid JSON despite trailing text
         assert result is not None
         assert result['title'] == 'Meeting'
 

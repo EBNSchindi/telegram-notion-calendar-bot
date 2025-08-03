@@ -75,6 +75,29 @@ quarter to 5        → 04:45
 1. Prüfe mit `/start` den Datenbankstatus
 2. Teste Verbindung mit `/reminder test`
 
+### Problem: Partner-Sync funktioniert nicht (Termine erscheinen nicht in geteilter Datenbank)
+
+**Symptome:**
+- Termine mit "Partner Relevant" bleiben nur in privater Datenbank
+- Keine Fehlermeldungen in Telegram
+- Geteilte Datenbank bleibt leer
+
+**Häufige Ursachen:**
+1. **Fehlende Konfiguration:** `shared_notion_database_id` nicht gesetzt
+2. **Berechtigungen:** API-Key hat keinen Zugriff auf beide Datenbanken
+3. **Datumsfeld-Migration:** Alte `Datum` vs neue `Startdatum`/`Endedatum` Felder
+4. **Netzwerk-Probleme:** Besonders in Docker-Umgebungen
+
+**Schnelle Lösung:**
+1. **Konfiguration prüfen:** Stelle sicher, dass `shared_notion_database_id` in `users_config.json` vorhanden ist
+2. **Schema prüfen:** Geteilte Datenbank muss `Startdatum`, `Endedatum`, `SourcePrivateId` und `SourceUserId` haben
+3. **Test-Termin:** Erstelle `/add morgen 14:00 SYNC_TEST` und markiere als Partner Relevant
+4. **Logs prüfen:** `docker logs -f calendar-telegram-bot | grep "Partner sync"`
+
+**Hinweis:** Der Bot hat jetzt einen automatischen Retry-Mechanismus (3 Versuche mit exponentieller Verzögerung: 1s → 2s → 4s). Bei temporären Fehlern (Netzwerk, Rate Limits) wird automatisch wiederholt.
+
+📖 **Ausführliche Anleitung:** Siehe [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) für detaillierte Partner-Sync Fehlerbehebung
+
 ## 📅 Termin-Erstellung Probleme
 
 ### Problem: "Termin muss in der Zukunft liegen"

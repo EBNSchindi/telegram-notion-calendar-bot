@@ -596,7 +596,27 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             )
     
     def _parse_add_command(self, args: List[str]) -> tuple[datetime, str, str]:
-        """Parse arguments for add command with smart time parsing."""
+        """Parse arguments for add command with smart time parsing.
+        
+        Handles various German and English time formats including:
+        - Standard: "14:00", "2:30 PM"
+        - German colloquial: "14 Uhr", "halb 6", "viertel vor 5"
+        - English colloquial: "half past 3", "quarter to 5"
+        
+        Args:
+            args: List of command arguments [date, time, title, ...description]
+            
+        Returns:
+            tuple: (datetime, title, description)
+            
+        Raises:
+            ValueError: If arguments are insufficient or invalid
+            
+        Examples:
+            - ["morgen", "14:00", "Meeting"] -> (tomorrow 14:00, "Meeting", None)
+            - ["morgen", "halb", "6", "Dinner"] -> (tomorrow 17:30, "Dinner", None)
+            - ["heute", "4", "PM", "Arzt", "Checkup"] -> (today 16:00, "Arzt", "Checkup")
+        """
         if len(args) < 3:
             raise ValueError("Mindestens Datum, Zeit und Titel sind erforderlich")
         
@@ -716,7 +736,27 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
         return None
     
     async def process_ai_appointment_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Process a message using AI to extract appointment information."""
+        """Process a message using AI to extract appointment information.
+        
+        This method handles natural language appointment creation with AI assistance.
+        It extracts appointment details including duration, then prompts for partner relevance.
+        
+        Flow:
+        1. Validates user input and checks AI service availability
+        2. Uses AI to extract appointment data from natural language
+        3. Displays extracted information for user confirmation
+        4. Prompts for partner relevance with inline buttons
+        5. Stores pending appointment in context for callback handling
+        
+        Args:
+            update: Telegram update containing the user's message
+            context: Telegram context for storing temporary data
+            
+        Notes:
+            - Falls back to manual creation if AI is unavailable
+            - Supports duration extraction from natural language
+            - Partner relevance is asked via inline keyboard
+        """
         user_id = update.effective_user.id
         message_text = update.message.text
         
@@ -858,12 +898,16 @@ Funktionen. Der Bot lernt aus deinen Eingaben!
             user_tz = pytz.timezone(self.timezone.zone)
             date_obj = user_tz.localize(date_obj)
             
+            # Create appointment with extracted duration
+            # The 'date' field is used for backward compatibility
+            # The model's __init__ will automatically set start_date and end_date
             appointment = Appointment(
                 title=appointment_data['title'],
-                date=date_obj,
+                date=date_obj,  # This will trigger migration logic in __init__
                 description=appointment_data.get('description'),
                 location=appointment_data.get('location'),
-                partner_relevant=partner_relevant
+                partner_relevant=partner_relevant,
+                duration_minutes=appointment_data.get('duration_minutes', 60)  # Extracted duration or default
             )
             
             # Validate appointment

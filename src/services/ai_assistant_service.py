@@ -65,12 +65,31 @@ class AIAssistantService:
         """
         Extract appointment information from natural language text.
         
+        Uses OpenAI to parse natural language and extract structured appointment data.
+        Now includes duration extraction from various formats.
+        
         Args:
             text: The user's message containing appointment information
-            user_timezone: The user's timezone
+            user_timezone: The user's timezone for relative date calculations
             
         Returns:
             Dictionary with extracted appointment data or None if extraction failed
+            
+        Return format:
+            {
+                "title": str,           # Appointment title
+                "date": "YYYY-MM-DD",   # Date in ISO format
+                "time": "HH:MM",        # Time in 24-hour format (optional)
+                "duration_minutes": int, # Duration in minutes (default: 60)
+                "description": str,      # Additional details (optional)
+                "location": str,         # Location (optional)
+                "confidence": float      # AI confidence score (0.0-1.0)
+            }
+            
+        Supported duration formats:
+            - "30 min", "1h", "2 Stunden", "halbe Stunde"
+            - "1.5h", "1,5h", "anderthalb Stunden"
+            - "Viertelstunde" (15 min)
         """
         if not self.client:
             logger.warning("OpenAI client not initialized - AI extraction unavailable")
@@ -96,6 +115,7 @@ Extract and return a JSON object with the following structure:
     "title": "appointment title",
     "date": "YYYY-MM-DD",
     "time": "HH:MM" (24-hour format, null if no time mentioned),
+    "duration_minutes": number (default 60 if not specified),
     "description": "additional details if any" (null if none),
     "location": "location if mentioned" (null if none),
     "confidence": 0.0 to 1.0 (how confident you are in the extraction)
@@ -124,6 +144,20 @@ DATE/TIME EXTRACTION RULES:
 4. If time is mentioned in 12-hour format (e.g., "3pm", "15 Uhr"), convert to 24-hour
 5. "heute" = today, "morgen" = tomorrow, "übermorgen" = day after tomorrow
 
+DURATION EXTRACTION RULES:
+1. Default is 60 minutes if no duration is mentioned
+2. Convert all durations to minutes:
+   - "30 min" → 30
+   - "1h" or "1 Stunde" → 60
+   - "1.5h" or "1,5h" or "anderthalb Stunden" → 90
+   - "2h" or "2 Stunden" → 120
+   - "halbe Stunde" → 30
+   - "Viertelstunde" → 15
+3. Common patterns to recognize:
+   - German: "[X] Minuten", "[X] min", "[X] Stunde(n)", "[X] h", "halbe Stunde", "anderthalb Stunden"
+   - English: "[X] minutes", "[X] min", "[X] hour(s)", "[X] h", "half hour", "half an hour"
+4. Duration can appear anywhere in the text
+
 CONTEXT EXTRACTION:
 1. Extract ALL relevant context from the input - NOTHING should be lost!
 2. If location is mentioned, include it in the location field
@@ -141,15 +175,15 @@ CONFIDENCE RULES:
 4. If confidence < 0.5, the appointment will be rejected
 
 Examples:
-- "Morgen um 15 Uhr Zahnarzttermin" → title: "Zahnarzttermin", date: tomorrow's date, time: "15:00"
-- "heute 16 Uhr Mama im Krankenhaus besuchen" → title: "Krankenhausbesuch Mama", location: "Krankenhaus", date: today
-- "Nächsten Montag Meeting mit dem Team im Büro" → title: "Team Meeting", location: "Büro", date: next Monday
-- "Arzttermin am 25.3. um 10:30 wegen Vorsorge" → title: "Arzttermin", description: "Vorsorgeuntersuchung", date: "2025-03-25", time: "10:30"
-- "Feierabendbier mit Peter" → title: "Feierabendbier mit Peter", description: "Treffen mit Peter", confidence: 0.85
-- "Kaffee trinken mit Sarah im Café Central" → title: "Kaffee mit Sarah", location: "Café Central", confidence: 0.9
-- "Abendessen mit den Eltern bei Mama" → title: "Abendessen mit Eltern", location: "bei Mama", confidence: 0.9
+- "Morgen um 15 Uhr Zahnarzttermin" → title: "Zahnarzttermin", date: tomorrow's date, time: "15:00", duration_minutes: 60
+- "heute 16 Uhr Mama im Krankenhaus besuchen für 30 min" → title: "Krankenhausbesuch Mama", location: "Krankenhaus", date: today, duration_minutes: 30
+- "Nächsten Montag Meeting mit dem Team im Büro für 2 Stunden" → title: "Team Meeting", location: "Büro", date: next Monday, duration_minutes: 120
+- "Arzttermin am 25.3. um 10:30 wegen Vorsorge (halbe Stunde)" → title: "Arzttermin", description: "Vorsorgeuntersuchung", date: "2025-03-25", time: "10:30", duration_minutes: 30
+- "Feierabendbier mit Peter" → title: "Feierabendbier mit Peter", description: "Treffen mit Peter", confidence: 0.85, duration_minutes: 60
+- "Kaffee trinken mit Sarah im Café Central für 1.5h" → title: "Kaffee mit Sarah", location: "Café Central", confidence: 0.9, duration_minutes: 90
+- "Abendessen mit den Eltern bei Mama (2h)" → title: "Abendessen mit Eltern", location: "bei Mama", confidence: 0.9, duration_minutes: 120
 
-Return ONLY the JSON object, no additional text."""
+IMPORTANT: Return ONLY valid JSON, no additional text, no markdown code blocks, no explanations."""
 
         try:
             for attempt in range(self.max_retries):
@@ -158,7 +192,7 @@ Return ONLY the JSON object, no additional text."""
                         self.client.chat.completions.create(
                             model=AI_MODEL,
                             messages=[
-                                {"role": "system", "content": "You are a precise appointment extraction assistant. Always respond with valid JSON only."},
+                                {"role": "system", "content": "You are a precise appointment extraction assistant. You MUST respond with ONLY valid JSON, no additional text, no markdown formatting, no code blocks."},
                                 {"role": "user", "content": prompt}
                             ],
                             temperature=AI_TEMPERATURE,
@@ -169,12 +203,30 @@ Return ONLY the JSON object, no additional text."""
                     
                     content = response.choices[0].message.content.strip()
                     
-                    # Try to extract JSON from the response
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        content = json_match.group()
+                    # Try to extract JSON from the response with improved pattern
+                    # This handles the "Extra data: line X column Y" error by:
+                    # 1. First trying to find JSON in a code block
+                    # 2. Using non-greedy regex to match nested JSON objects
+                    # 3. Cleaning up any trailing content after the last closing brace
                     
-                    result = json.loads(content)
+                    # First try to find JSON in code block
+                    json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+                    if not json_match:
+                        # Try without code block - use non-greedy matching for nested objects
+                        json_match = re.search(r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})', content, re.DOTALL)
+                    
+                    if json_match:
+                        json_str = json_match.group(1) if '```' in content else json_match.group(0)
+                        # Clean up any trailing content that causes "Extra data" errors
+                        json_str = json_str.strip()
+                        # Remove any content after the last closing brace
+                        last_brace = json_str.rfind('}')
+                        if last_brace != -1:
+                            json_str = json_str[:last_brace + 1]
+                        
+                        result = json.loads(json_str)
+                    else:
+                        raise json.JSONDecodeError("No valid JSON found in response", content, 0)
                     
                     # Validate required fields
                     if not result.get('title') or not result.get('date'):
@@ -185,6 +237,17 @@ Return ONLY the JSON object, no additional text."""
                     if result.get('confidence', 0) < AI_MIN_CONFIDENCE:
                         logger.info(f"Low confidence extraction: {result.get('confidence')}")
                         return None
+                    
+                    # Set default duration if not provided
+                    # This ensures backward compatibility and handles missing duration
+                    if 'duration_minutes' not in result or result['duration_minutes'] is None:
+                        result['duration_minutes'] = 60
+                    
+                    # Ensure duration is an integer (AI might return float or string)
+                    try:
+                        result['duration_minutes'] = int(result['duration_minutes'])
+                    except (ValueError, TypeError):
+                        result['duration_minutes'] = 60
                     
                     return result
                     
@@ -324,18 +387,49 @@ Return ONLY the JSON object, no additional text."""
             if len(appointment_data['location']) > 200:
                 appointment_data['location'] = appointment_data['location'][:197] + '...'
         
+        # Validate and clean duration_minutes
+        # Ensures duration is within reasonable bounds and properly formatted
+        if appointment_data.get('duration_minutes') is not None:
+            try:
+                duration = int(appointment_data['duration_minutes'])
+                # Ensure duration is reasonable (between 5 minutes and 24 hours)
+                if duration < 5:
+                    duration = 60  # Default to 1 hour if too small
+                elif duration > 1440:  # More than 24 hours
+                    duration = 1440  # Cap at 24 hours
+                appointment_data['duration_minutes'] = duration
+            except (ValueError, TypeError):
+                # If conversion fails, default to 60 minutes
+                appointment_data['duration_minutes'] = 60
+        else:
+            # No duration specified, use default
+            appointment_data['duration_minutes'] = 60
+        
         return appointment_data
 
     async def extract_memo_from_text(self, text: str, user_timezone: str = 'Europe/Berlin') -> Optional[Dict[str, Any]]:
         """
         Extract memo information from natural language text.
         
+        Uses OpenAI to parse natural language and extract structured memo/task data.
+        Falls back to basic extraction if AI service is unavailable.
+        
         Args:
             text: The user's message containing memo/task information
-            user_timezone: The user's timezone
+            user_timezone: The user's timezone for relative date calculations
             
         Returns:
             Dictionary with extracted memo data or None if extraction failed
+            
+        Return format:
+            {
+                "aufgabe": str,           # Task/memo title (required)
+                "notizen": str,           # Additional notes (optional)
+                "faelligkeitsdatum": str, # Due date in YYYY-MM-DD format (optional)
+                "bereich": str,           # Category/area (optional)
+                "projekt": str,           # Project name (optional)
+                "confidence": float       # AI confidence score (0.0-1.0)
+            }
         """
         if not self.client:
             logger.warning("OpenAI client not initialized - falling back to basic extraction")
@@ -419,12 +513,30 @@ Return ONLY the JSON object, no additional text."""
                     
                     content = response.choices[0].message.content.strip()
                     
-                    # Try to extract JSON from the response
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        content = json_match.group()
+                    # Try to extract JSON from the response with improved pattern
+                    # This handles the "Extra data: line X column Y" error by:
+                    # 1. First trying to find JSON in a code block
+                    # 2. Using non-greedy regex to match nested JSON objects
+                    # 3. Cleaning up any trailing content after the last closing brace
                     
-                    result = json.loads(content)
+                    # First try to find JSON in code block
+                    json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+                    if not json_match:
+                        # Try without code block - use non-greedy matching for nested objects
+                        json_match = re.search(r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})', content, re.DOTALL)
+                    
+                    if json_match:
+                        json_str = json_match.group(1) if '```' in content else json_match.group(0)
+                        # Clean up any trailing content that causes "Extra data" errors
+                        json_str = json_str.strip()
+                        # Remove any content after the last closing brace
+                        last_brace = json_str.rfind('}')
+                        if last_brace != -1:
+                            json_str = json_str[:last_brace + 1]
+                        
+                        result = json.loads(json_str)
+                    else:
+                        raise json.JSONDecodeError("No valid JSON found in response", content, 0)
                     
                     # Validate required fields
                     if not result.get('aufgabe'):

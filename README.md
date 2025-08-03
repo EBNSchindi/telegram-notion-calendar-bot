@@ -208,6 +208,8 @@ Create a `users_config.json` file based on the example:
 
 See [docs/NOTION_SETUP.md](docs/NOTION_SETUP.md) for detailed setup instructions.
 
+**Important Update**: The bot now uses separate start and end date fields. See [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for migration instructions if you're upgrading from an older version.
+
 #### Memo-Datenbank (NEU)
 | Property | Type | Erforderlich | Beschreibung |
 |----------|------|-------------|-------------|
@@ -222,7 +224,9 @@ See [docs/NOTION_SETUP.md](docs/NOTION_SETUP.md) for detailed setup instructions
 | Property | Type | Erforderlich | Beschreibung |
 |----------|------|-------------|-------------|
 | Name | Title | ✅ | Termintitel |
-| Datum | Date | ✅ | Terminzeit |
+| Startdatum | Date | ✅ | Startzeit (neu) |
+| Endedatum | Date | ✅ | Endzeit (neu) |
+| Datum | Date | ❌ | Legacy-Feld (optional) |
 | Beschreibung | Rich Text | ❌ | Zusatzinfo |
 | Ort | Rich Text | ❌ | Terminort |
 | PartnerRelevant | Checkbox | ✅ | AI-Feature |
@@ -242,9 +246,15 @@ Der Bot startet mit einem vereinfachten 2x2+1 Menü:
 ```bash
 # Natürliche Sprache - der Bot versteht:
 "morgen 15 Uhr Zahnarzttermin"
-"heute 16:30 Mama im Krankenhaus besuchen"
-"nächsten Montag 9 Uhr Meeting mit Team"
-"übermorgen 14:30 Friseur"
+"heute 16:30 Mama im Krankenhaus besuchen für 30 min"
+"nächsten Montag 9 Uhr Meeting mit Team für 2 Stunden"
+"übermorgen 14:30 Friseur für eine halbe Stunde"
+
+# Dauer wird automatisch erkannt:
+- "für 30 min" → 30 Minuten
+- "für 2 Stunden" → 120 Minuten
+- "für eine halbe Stunde" → 30 Minuten
+- Ohne Angabe → 60 Minuten (Standard)
 
 # Der Bot fragt automatisch:
 "Soll dieser Termin auch für Partner sichtbar sein?"
@@ -525,6 +535,41 @@ async def ai_function():
 ```
 
 ## 🔄 Migration & Changelog
+
+### Version 3.1.1 (2025-08-03) - Partner Sync Fixes & Retry Mechanism 🔄
+- **🐛 Partner Sync Date Field Fix**
+  - Fixed: Partner sync now correctly uses `start_date`/`end_date` instead of old `date` field
+  - Maintains full backward compatibility with legacy appointments
+  - Enhanced debug logging for sync troubleshooting
+  
+- **🔄 Retry Mechanism**
+  - Automatic retry with exponential backoff (1s → 2s → 4s)
+  - Distinguishes between temporary errors (network, rate limits) and permanent errors
+  - Adds jitter to prevent thundering herd problem
+  - HTTP 429 and 503 errors handled gracefully
+  
+- **📚 Documentation**
+  - New comprehensive troubleshooting guide for partner sync issues
+  - Docker-specific debugging instructions
+  - Common configuration mistakes and solutions
+  - See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+
+### Version 3.1.0 (2025-01-21) - Date Field Migration 📅
+- **✨ Separate Start- und End-Datum**
+  - Neue Felder: `Startdatum` und `Endedatum` statt einzelnes `Datum`
+  - Vollständige Abwärtskompatibilität
+  - Automatische Migration bestehender Termine
+  - Standard-Dauer: 60 Minuten wenn nicht angegeben
+
+- **🤖 Verbesserte KI-Extraktion**
+  - Dauer-Erkennung aus natürlicher Sprache
+  - Robustere JSON-Verarbeitung (behebt "Extra data" Fehler)
+  - Unterstützt: "30 min", "2 Stunden", "halbe Stunde", etc.
+
+- **📚 Erweiterte Dokumentation**
+  - Migrations-Guide für Datenbank-Updates
+  - Inline-Dokumentation für alle geänderten Methoden
+  - Umfassende Tests für neue Funktionalität
 
 ### Version 3.0.1 (2025-01-21) - AI Debugging & Test Suite 🧪
 - **🧪 Umfassende Test-Suite**

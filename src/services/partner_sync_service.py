@@ -3,21 +3,115 @@
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable, TypeVar, Union
 import uuid
+import functools
+import random
 
 from src.models.appointment import Appointment
 from src.models.shared_appointment import SharedAppointment
 from src.services.notion_service import NotionService
 from config.user_config import UserConfigManager, UserConfig
 from src.utils.duplicate_checker import DuplicateChecker
-from src.constants import PARTNER_SYNC_INTERVAL_HOURS
+from src.constants import (
+    PARTNER_SYNC_INTERVAL_HOURS, 
+    SYNC_MAX_RETRIES,
+    SYNC_INITIAL_RETRY_DELAY,
+    SYNC_RETRY_BACKOFF_FACTOR
+)
 
 # Define missing constants
 DATABASE_REFRESH_INTERVAL = 300  # 5 minutes
 PARTNER_SYNC_INTERVAL = PARTNER_SYNC_INTERVAL_HOURS * 3600  # Convert hours to seconds
 
 logger = logging.getLogger(__name__)
+
+# Type variable for retry decorator
+T = TypeVar('T')
+
+
+def async_retry_with_backoff(
+    max_retries: int = SYNC_MAX_RETRIES,
+    initial_delay: float = SYNC_INITIAL_RETRY_DELAY,
+    backoff_factor: float = SYNC_RETRY_BACKOFF_FACTOR,
+    retryable_exceptions: tuple = (Exception,),
+    permanent_exceptions: tuple = (),
+    on_retry: Optional[Callable] = None
+):
+    """
+    Async retry decorator with exponential backoff and jitter.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds
+        backoff_factor: Factor to multiply delay by after each retry
+        retryable_exceptions: Tuple of exceptions that trigger retry
+        permanent_exceptions: Tuple of exceptions that should not be retried
+        on_retry: Optional callback function called on each retry
+    """
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except permanent_exceptions as e:
+                    # Don't retry permanent failures
+                    logger.error(f"{func.__name__} failed with permanent error: {e}")
+                    raise
+                except retryable_exceptions as e:
+                    last_exception = e
+                    
+                    if attempt == max_retries:
+                        # Final attempt failed
+                        logger.error(
+                            f"{func.__name__} failed after {max_retries} retries: {e}"
+                        )
+                        raise
+                    
+                    # Calculate delay with exponential backoff
+                    delay = initial_delay * (backoff_factor ** attempt)
+                    
+                    # Add jitter to prevent thundering herd
+                    jittered_delay = delay * (0.5 + random.random())
+                    
+                    logger.warning(
+                        f"{func.__name__} attempt {attempt + 1} failed: {e}. "
+                        f"Retrying in {jittered_delay:.2f} seconds..."
+                    )
+                    
+                    # Call retry callback if provided
+                    if on_retry:
+                        if asyncio.iscoroutinefunction(on_retry):
+                            await on_retry(attempt, e, jittered_delay)
+                        else:
+                            on_retry(attempt, e, jittered_delay)
+                    
+                    await asyncio.sleep(jittered_delay)
+            
+            # Should never reach here, but just in case
+            if last_exception:
+                raise last_exception
+                
+        return wrapper
+    return decorator
+
+
+class SyncError(Exception):
+    """Base exception for sync errors."""
+    pass
+
+
+class TemporarySyncError(SyncError):
+    """Temporary sync error that should be retried."""
+    pass
+
+
+class PermanentSyncError(SyncError):
+    """Permanent sync error that should not be retried."""
+    pass
 
 
 class PartnerSyncService:
@@ -50,6 +144,8 @@ class PartnerSyncService:
         Returns:
             Dictionary with sync results and statistics
         """
+        logger.info(f"Starting partner sync for user {user_config.telegram_user_id}")
+        
         if not user_config.shared_notion_database_id:
             logger.warning(f"User {user_config.telegram_user_id} has no shared database configured")
             return {"success": False, "error": "No shared database configured"}
@@ -69,6 +165,9 @@ class PartnerSyncService:
             
             # Get all appointments from private database
             all_appointments = await private_service.get_appointments(limit=200)
+            if not all_appointments:
+                logger.warning(f"No appointments returned from private database for user {user_config.telegram_user_id}")
+                all_appointments = []
             partner_relevant = [apt for apt in all_appointments if apt.partner_relevant]
             
             stats = {
@@ -80,31 +179,37 @@ class PartnerSyncService:
             }
             
             # Process each partner-relevant appointment
-            for appointment in partner_relevant:
+            logger.info(f"Processing {len(partner_relevant)} partner-relevant appointments")
+            for i, appointment in enumerate(partner_relevant, 1):
                 try:
+                    logger.debug(f"Processing appointment {i}/{len(partner_relevant)}: {appointment.title}")
                     await self._sync_single_appointment_internal(
                         appointment, private_service, shared_service, 
                         user_config.telegram_user_id, stats
                     )
                 except Exception as e:
-                    logger.error(f"Error syncing appointment {appointment.notion_page_id}: {e}")
+                    logger.error(f"Error syncing appointment '{appointment.title}' (ID: {appointment.notion_page_id}): {e}", exc_info=True)
                     stats["errors"] += 1
             
             # Check for appointments that are no longer partner-relevant
             await self._cleanup_removed_appointments(private_service, shared_service, user_config.telegram_user_id, stats)
             
-            logger.info(f"Sync completed for user {user_config.telegram_user_id}: {stats}")
+            logger.info(f"Partner sync completed for user {user_config.telegram_user_id}: {stats}")
             return {"success": True, "stats": stats}
             
         except Exception as e:
-            logger.error(f"Error during sync for user {user_config.telegram_user_id}: {e}")
+            logger.error(f"Error during sync for user {user_config.telegram_user_id}: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
     
+    @async_retry_with_backoff(
+        retryable_exceptions=(TemporarySyncError, asyncio.TimeoutError, ConnectionError),
+        permanent_exceptions=(PermanentSyncError, ValueError, KeyError)
+    )
     async def sync_single_appointment(self, appointment: Appointment, 
                                     user_config: UserConfig, 
-                                    force_sync: bool = False) -> bool:
+                                    force_sync: bool = False) -> Dict[str, Any]:
         """
-        Sync a single appointment if it's partner-relevant.
+        Sync a single appointment if it's partner-relevant with retry mechanism.
         
         Args:
             appointment: The appointment to sync
@@ -112,15 +217,30 @@ class PartnerSyncService:
             force_sync: If True, sync even if already synced
             
         Returns:
-            True if synced successfully, False otherwise
+            Dictionary with sync result details:
+            - success: bool - Whether sync succeeded
+            - action: str - Action taken (created/updated/removed/skipped)
+            - error: str - Error message if failed
+            - shared_id: str - ID in shared database if synced
         """
+        result = {
+            "success": False,
+            "action": "skipped",
+            "error": None,
+            "shared_id": None
+        }
+        
         if not user_config.shared_notion_database_id:
             logger.warning(f"User {user_config.telegram_user_id} has no shared database configured")
-            return False
+            result["error"] = "No shared database configured"
+            return result
         
         if not appointment.partner_relevant and not force_sync:
             # If not partner relevant, check if we need to remove from shared DB
-            return await self.remove_from_shared(appointment.notion_page_id or "", user_config)
+            removed = await self.remove_from_shared(appointment.notion_page_id or "", user_config)
+            result["success"] = removed
+            result["action"] = "removed" if removed else "remove_failed"
+            return result
         
         try:
             private_service = NotionService(
@@ -137,16 +257,49 @@ class PartnerSyncService:
             
             stats = {"created": 0, "updated": 0, "errors": 0}
             
-            success = await self._sync_single_appointment_internal(
-                appointment, private_service, shared_service, 
-                user_config.telegram_user_id, stats
-            )
+            # Add timeout to prevent hanging
+            try:
+                success = await asyncio.wait_for(
+                    self._sync_single_appointment_internal(
+                        appointment, private_service, shared_service, 
+                        user_config.telegram_user_id, stats
+                    ),
+                    timeout=30.0  # 30 second timeout
+                )
+                
+                if success:
+                    result["success"] = True
+                    result["action"] = "created" if stats["created"] > 0 else "updated"
+                    # Try to get the shared ID
+                    sync_id = await self._get_sync_tracking(private_service, appointment.notion_page_id)
+                    result["shared_id"] = sync_id
+                else:
+                    result["error"] = "Sync returned false"
+                    
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout syncing appointment '{appointment.title}'")
+                raise TemporarySyncError("Sync operation timed out")
+                
+            return result
             
-            return success
-            
+        except (ConnectionError, asyncio.TimeoutError) as e:
+            # Network-related errors are temporary
+            logger.error(f"Network error syncing appointment: {e}")
+            raise TemporarySyncError(f"Network error: {str(e)}")
+        except ValueError as e:
+            # Data validation errors are permanent
+            logger.error(f"Data validation error: {e}")
+            result["error"] = f"Invalid data: {str(e)}"
+            raise PermanentSyncError(f"Data validation error: {str(e)}")
         except Exception as e:
-            logger.error(f"Error syncing single appointment: {e}")
-            return False
+            # Unexpected errors - analyze if temporary or permanent
+            error_str = str(e).lower()
+            if any(temp in error_str for temp in ['timeout', 'connection', 'network', 'rate limit']):
+                raise TemporarySyncError(f"Temporary error: {str(e)}")
+            else:
+                logger.error(f"Unexpected error syncing appointment: {e}", exc_info=True)
+                result["error"] = str(e)
+                return result
     
     async def remove_from_shared(self, appointment_id: str, user_config: UserConfig) -> bool:
         """
@@ -172,6 +325,8 @@ class PartnerSyncService:
             
             # Find appointment in shared database by SourcePrivateId
             shared_appointments = await shared_service.get_appointments(limit=500)
+            if not shared_appointments:
+                shared_appointments = []
             
             for shared_apt in shared_appointments:
                 if hasattr(shared_apt, 'source_private_id') and shared_apt.source_private_id == appointment_id:
@@ -250,7 +405,7 @@ class PartnerSyncService:
                                               user_id: int,
                                               stats: Dict[str, int]) -> bool:
         """
-        Internal method to sync a single appointment.
+        Internal method to sync a single appointment with enhanced error handling.
         
         Args:
             appointment: The appointment to sync
@@ -261,10 +416,17 @@ class PartnerSyncService:
             
         Returns:
             True if synced successfully
+            
+        Raises:
+            TemporarySyncError: For transient errors that should be retried
+            PermanentSyncError: For permanent errors that should not be retried
         """
         if not appointment.notion_page_id:
             logger.warning("Appointment has no notion_page_id, skipping sync")
-            return False
+            raise PermanentSyncError("Appointment has no notion_page_id")
+        
+        logger.debug(f"Syncing appointment: {appointment.title} (ID: {appointment.notion_page_id})")
+        logger.debug(f"Appointment dates: start={appointment.start_date}, end={appointment.end_date}")
         
         # Check if already synced by looking for SyncedToSharedId
         sync_id = await self._get_sync_tracking(private_service, appointment.notion_page_id)
@@ -276,16 +438,32 @@ class PartnerSyncService:
                 if shared_appointment:
                     # Update shared appointment with current data
                     updated_appointment = self._prepare_appointment_for_shared(appointment, user_id)
-                    await shared_service.update_appointment(sync_id, updated_appointment)
-                    stats["updated"] += 1
-                    logger.debug(f"Updated synced appointment {sync_id}")
-                    return True
+                    try:
+                        await shared_service.update_appointment(sync_id, updated_appointment)
+                        stats["updated"] += 1
+                        logger.debug(f"Updated synced appointment {sync_id}")
+                        return True
+                    except (ConnectionError, asyncio.TimeoutError) as e:
+                        logger.error(f"Network error updating shared appointment: {e}")
+                        raise TemporarySyncError(f"Network error during update: {str(e)}")
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if any(temp in error_str for temp in ['timeout', 'connection', 'network', 'rate limit', '429', '503']):
+                            raise TemporarySyncError(f"Temporary API error during update: {str(e)}")
+                        else:
+                            logger.error(f"Failed to update shared appointment: {e}", exc_info=True)
+                            # Don't raise permanent error here, try to recreate instead
+                            sync_id = None
                 else:
                     # Shared appointment was deleted, clear tracking and recreate
                     await self._clear_sync_tracking(private_service, appointment.notion_page_id)
                     sync_id = None
+            except TemporarySyncError:
+                # Re-raise temporary errors for retry
+                raise
             except Exception as e:
                 logger.warning(f"Error checking shared appointment {sync_id}: {e}")
+                # Assume shared appointment might be deleted, try to recreate
                 sync_id = None
         
         if not sync_id:
@@ -310,12 +488,14 @@ class PartnerSyncService:
                 # Before creating, do one more check for duplicates across ALL appointments
                 # This handles edge cases where multiple users might create similar appointments
                 all_shared = await shared_service.get_appointments(limit=500)
+                if not all_shared:
+                    all_shared = []
                 duplicate = DuplicateChecker.find_appointment_by_content(appointment, all_shared)
                 
                 if duplicate:
                     # Found a duplicate from another user, log and skip
                     logger.warning(
-                        f"Skipping creation of '{appointment.title}' at {appointment.date} - "
+                        f"Skipping creation of '{appointment.title}' at {appointment.start_date} - "
                         f"duplicate already exists in shared database (created by different user)"
                     )
                     stats["errors"] += 1
@@ -323,14 +503,32 @@ class PartnerSyncService:
                 
                 # Create new appointment in shared database
                 shared_appointment = self._prepare_appointment_for_shared(appointment, user_id)
-                shared_page_id = await shared_service.create_appointment(shared_appointment)
+                logger.debug(f"Creating new shared appointment with data: title={shared_appointment.title}, start={shared_appointment.start_date}, end={shared_appointment.end_date}")
                 
-                # Update private database with sync tracking
-                await self._update_sync_tracking(private_service, appointment.notion_page_id, shared_page_id)
-                
-                stats["created"] += 1
-                logger.debug(f"Created new synced appointment {shared_page_id}")
-                return True
+                try:
+                    shared_page_id = await shared_service.create_appointment(shared_appointment)
+                    logger.debug(f"Successfully created shared appointment with ID: {shared_page_id}")
+                    
+                    # Update private database with sync tracking
+                    await self._update_sync_tracking(private_service, appointment.notion_page_id, shared_page_id)
+                    
+                    stats["created"] += 1
+                    logger.info(f"Created new synced appointment '{appointment.title}' (shared ID: {shared_page_id})")
+                    return True
+                except (ConnectionError, asyncio.TimeoutError) as e:
+                    logger.error(f"Network error creating shared appointment: {e}")
+                    raise TemporarySyncError(f"Network error: {str(e)}")
+                except ValueError as e:
+                    logger.error(f"Data validation error creating shared appointment: {e}")
+                    raise PermanentSyncError(f"Invalid appointment data: {str(e)}")
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if any(temp in error_str for temp in ['timeout', 'connection', 'network', 'rate limit', '429', '503']):
+                        logger.error(f"Temporary error creating shared appointment: {e}")
+                        raise TemporarySyncError(f"Temporary API error: {str(e)}")
+                    else:
+                        logger.error(f"Failed to create shared appointment: {e}", exc_info=True)
+                        raise PermanentSyncError(f"Failed to create appointment: {str(e)}")
         
         return False
     
@@ -345,10 +543,15 @@ class PartnerSyncService:
         Returns:
             SharedAppointment optimized for shared database
         """
+        logger.debug(f"Preparing appointment '{appointment.title}' for shared database")
+        logger.debug(f"Start date: {appointment.start_date}, End date: {appointment.end_date}")
+        
         # Create SharedAppointment (excludes PartnerRelevant property)
         shared_appointment = SharedAppointment(
             title=appointment.title,
-            date=appointment.date,
+            start_date=appointment.start_date,  # Use new field
+            end_date=appointment.end_date,      # Use new field
+            date=appointment.date,              # Keep for backward compatibility
             description=appointment.description,
             location=appointment.location,
             tags=appointment.tags,
@@ -362,6 +565,7 @@ class PartnerSyncService:
             created_at=appointment.created_at
         )
         
+        logger.debug(f"Created SharedAppointment with dates: start={shared_appointment.start_date}, end={shared_appointment.end_date}")
         return shared_appointment
     
     async def _get_sync_tracking(self, private_service: NotionService, appointment_id: str) -> Optional[str]:
@@ -464,11 +668,15 @@ class PartnerSyncService:
         try:
             # Get all appointments in shared database for this user
             shared_appointments = await shared_service.get_appointments(limit=500)
+            if not shared_appointments:
+                shared_appointments = []
             user_shared = [apt for apt in shared_appointments 
                          if hasattr(apt, 'source_user_id') and apt.source_user_id == user_id]
             
             # Get all partner-relevant appointments from private database
             private_appointments = await private_service.get_appointments(limit=500)
+            if not private_appointments:
+                private_appointments = []
             partner_relevant_ids = {apt.notion_page_id for apt in private_appointments if apt.partner_relevant}
             
             # Remove appointments that are no longer partner-relevant
@@ -500,6 +708,8 @@ class PartnerSyncService:
         try:
             # Get all appointments from shared database
             shared_appointments = await shared_service.get_appointments(limit=500)
+            if not shared_appointments:
+                shared_appointments = []
             
             # Filter appointments from the same user
             user_appointments = [
@@ -549,9 +759,13 @@ class PartnerSyncService:
             
             # Get statistics
             private_appointments = await private_service.get_appointments(limit=200)
+            if not private_appointments:
+                private_appointments = []
             partner_relevant_count = sum(1 for apt in private_appointments if apt.partner_relevant)
             
             shared_appointments = await shared_service.get_appointments(limit=200)
+            if not shared_appointments:
+                shared_appointments = []
             user_shared_count = sum(1 for apt in shared_appointments 
                                   if hasattr(apt, 'source_user_id') and apt.source_user_id == user_config.telegram_user_id)
             
