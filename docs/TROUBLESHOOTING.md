@@ -1,12 +1,176 @@
 # 🔧 Troubleshooting Guide - Telegram Notion Calendar Bot
 
 ## 📋 Table of Contents
+- [Time Format Problems](#time-format-problems)
+- [Database Problems](#database-problems)
 - [Partner Sync Issues](#partner-sync-issues)
+- [Appointment Creation Problems](#appointment-creation-problems)
+- [Reminder Problems](#reminder-problems)
+- [Menu Problems](#menu-problems)
+- [Debug Commands](#debug-commands)
 - [Date Field Migration](#date-field-migration)
 - [Configuration Problems](#configuration-problems)
 - [Debug Logging](#debug-logging)
 - [Docker-Specific Issues](#docker-specific-issues)
 - [Common Error Messages](#common-error-messages)
+
+## 🕐 Time Format Problems
+
+### Problem: "Invalid time format" error
+
+**Symptom:** The bot doesn't accept your time input.
+
+**Quick Solution:**
+1. **Test your time format:** `/test_time 16 Uhr`
+2. **Show all formats:** `/formats`
+3. **Validate complete command:** `/validate tomorrow 16 Uhr Meeting`
+
+### Common Time Format Errors
+
+| ❌ Wrong | ✅ Correct | Result |
+|-----------|------------|----------|
+| `16` | `16 Uhr` or `16:00` | 16:00 |
+| `4 pm` (with space) | `4pm` or `4 PM` | 16:00 |
+| `2,30` | `2:30` or `2.30` | 02:30 |
+| `halb3` | `halb 3` | 02:30 |
+| `viertelvor5` | `viertel vor 5` | 04:45 |
+
+### Supported Time Formats
+
+#### 🕐 Standard Formats
+```
+14:30    → 14:30
+14.30    → 14:30  
+1430     → 14:30
+930      → 09:30
+```
+
+#### 🇩🇪 German Formats
+```
+16 Uhr              → 16:00
+16 Uhr 30           → 16:30
+16:30 Uhr           → 16:30
+halb 3              → 02:30
+viertel vor 5       → 04:45
+viertel nach 3      → 03:15
+```
+
+#### 🇺🇸 English Formats
+```
+4 PM                → 16:00
+8 AM                → 08:00
+4:30 PM             → 16:30
+12 AM               → 00:00 (midnight)
+12 PM               → 12:00 (noon)
+quarter past 2      → 02:15
+half past 3         → 03:30
+quarter to 5        → 04:45
+```
+
+## 🗂 Database Problems
+
+### Problem: "You are not configured yet"
+
+**Cause:** Your Telegram User ID is not in `users_config.json`.
+
+**Solution:**
+1. Find your User ID with `/start` (will be displayed)
+2. Administrator must add you to `users_config.json`
+3. Restart bot
+
+### Problem: Appointments from shared database not showing
+
+**Possible Causes:**
+- Missing `shared_notion_api_key` or `shared_notion_database_id`
+- No permission for shared database
+- Shared database is empty
+
+**Debugging:**
+1. Check database status with `/start`
+2. Test connection with `/reminder test`
+
+## 📅 Appointment Creation Problems
+
+### Problem: "Appointment must be in the future"
+
+**Cause:** You're trying to create an appointment in the past.
+
+**Solution:**
+```bash
+# Wrong (if it's already after 14:30)
+/add today 14:30 Meeting
+
+# Correct
+/add tomorrow 14:30 Meeting
+# or
+/add today 16:00 Meeting  # if it's still before 16:00
+```
+
+### Problem: Appointment not created
+
+**Debugging Steps:**
+1. **Validate input:** `/validate tomorrow 16 Uhr Meeting`
+2. **Test time format:** `/test_time 16 Uhr`
+3. **Check database status:** `/start`
+
+## 📨 Reminder Problems
+
+### Problem: No reminders received
+
+**Checklist:**
+1. ✅ Reminders enabled: `/reminder`
+2. ✅ Correct time set: `/reminder time 08:00`
+3. ✅ Bot is running and online
+4. ✅ Appointments exist for today/tomorrow
+
+**Test:** `/reminder test` - should send reminder immediately
+
+### Problem: Reminder shows wrong appointments
+
+**Possible Causes:**
+- Wrong timezone configured
+- Data in wrong database
+
+**Solution:**
+- Check timezone in `users_config.json`
+- Test with `/reminder preview`
+
+## 🎛 Menu Problems
+
+### Problem: Inline buttons don't work
+
+**Cause:** Old Telegram version or bot update
+
+**Solution:**
+1. Update Telegram app
+2. Restart bot with `/start`
+3. Alternative: Use direct commands (`/today`, `/list`, etc.)
+
+## 🔍 Debug Commands
+
+### Test Time Format
+```bash
+/test_time 16 Uhr
+# Shows: ✅ Success: 16:00 (16:00)
+
+/test_time 4 PM  
+# Shows: ✅ Success: 16:00 (16:00)
+
+/test_time halb 3
+# Shows: ✅ Success: 02:30 (02:30)
+```
+
+### Show All Formats
+```bash
+/formats
+# Shows complete list of all supported time formats
+```
+
+### Validate Appointment Input
+```bash
+/validate tomorrow 16 Uhr Meeting
+# Checks date, time and title before creation
+```
 
 ## 👥 Partner Sync Issues
 
@@ -287,3 +451,22 @@ If problems persist:
 4. Check GitHub issues for similar problems
 
 Remember: Most sync issues are configuration-related and can be resolved by verifying the shared database setup and API key permissions.
+
+## 📞 Support
+
+### If nothing helps:
+
+1. **Check logs:** Bot administrator can check `bot.log`
+2. **Restart:** Restart bot and/or Telegram app
+3. **Test commands:** Use debug commands for diagnosis
+4. **Check config:** Validate `users_config.json` and `.env`
+
+### Common Solutions:
+- Restart bot
+- Update Telegram app  
+- Reload configuration
+- Clear user cache (restart bot)
+
+---
+
+💡 **Tip:** Use debug commands (`/test_time`, `/formats`, `/validate`) to quickly identify problems\!
