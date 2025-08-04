@@ -4,6 +4,8 @@ import logging
 import asyncio
 import sys
 import os
+from functools import wraps
+from typing import Callable
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -59,6 +61,71 @@ setup_secure_logging('bot.log', log_level, enable_debug=debug_mode)
 logger = logging.getLogger(__name__)
 
 
+def require_authorized_user(func: Callable) -> Callable:
+    """Decorator to check if user is authorized before processing commands.
+    
+    This decorator implements a two-tier authorization system:
+    1. If ALLOWED_USER_IDS environment variable is set, only users in that whitelist can access
+    2. If no whitelist is configured, falls back to checking if user has valid configuration
+    
+    Args:
+        func: The async function to be decorated (bot command handler)
+        
+    Returns:
+        Wrapped function that performs authorization check before execution
+        
+    Environment Variables:
+        ALLOWED_USER_IDS: Comma-separated list of Telegram user IDs (e.g., "123456789,987654321")
+        
+    Raises:
+        No exceptions raised - unauthorized users receive error message instead
+        
+    Example:
+        @require_authorized_user
+        async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            # Handler code here
+    """
+    @wraps(func)
+    async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+        
+        # Get allowed user IDs from environment variable
+        allowed_users_str = os.getenv('ALLOWED_USER_IDS', '')
+        if not allowed_users_str:
+            # If no whitelist is configured, check if user has valid config
+            user_config = self.user_config_manager.get_user_config(user_id)
+            if not user_config:
+                # Use appropriate reply method based on update type
+                if update.message:
+                    await update.message.reply_text(
+                        "❌ Unauthorized access. Please contact the administrator."
+                    )
+                elif update.callback_query:
+                    await update.callback_query.answer(
+                        "❌ Unauthorized access.", show_alert=True
+                    )
+                logger.warning(f"Unauthorized access attempt by user {user_id}")
+                return
+        else:
+            # Check against whitelist
+            allowed_user_ids = [uid.strip() for uid in allowed_users_str.split(',') if uid.strip()]
+            if str(user_id) not in allowed_user_ids:
+                # Use appropriate reply method based on update type
+                if update.message:
+                    await update.message.reply_text(
+                        "❌ Unauthorized access. You are not in the allowed users list."
+                    )
+                elif update.callback_query:
+                    await update.callback_query.answer(
+                        "❌ Unauthorized access.", show_alert=True
+                    )
+                logger.warning(f"Unauthorized access attempt by user {user_id} - not in whitelist")
+                return
+        
+        return await func(self, update, context, *args, **kwargs)
+    return wrapper
+
+
 class EnhancedCalendarBot:
     """Main bot class that orchestrates all functionality.
     
@@ -93,6 +160,7 @@ class EnhancedCalendarBot:
         self._handlers[user_id] = handler
         return handler
     
+    @require_authorized_user
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command - show main menu."""
         user_id = update.effective_user.id
@@ -114,6 +182,7 @@ class EnhancedCalendarBot:
         
         await handler.show_main_menu(update, context)
     
+    @require_authorized_user
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle callback queries from inline keyboards."""
         user_id = update.effective_user.id
@@ -125,6 +194,7 @@ class EnhancedCalendarBot:
         
         await handler.handle_callback(update, context)
     
+    @require_authorized_user
     async def handle_appointment_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                        command: str) -> None:
         """Handle appointment commands with user-specific configuration."""
@@ -148,6 +218,7 @@ class EnhancedCalendarBot:
         elif command == "tomorrow":
             await handler.tomorrow_appointments(update, context)
     
+    @require_authorized_user
     async def handle_memo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                 command: str) -> None:
         """Handle memo commands with user-specific configuration."""
@@ -174,6 +245,7 @@ class EnhancedCalendarBot:
         elif command == "check_memo":
             await handler.memo_handler.handle_check_memo_command(update, context)
     
+    @require_authorized_user
     async def reminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle reminder settings command."""
         user_id = update.effective_user.id
@@ -259,6 +331,7 @@ class EnhancedCalendarBot:
         else:
             await update.message.reply_text("❌ Unbekannter Befehl. Nutze /reminder für Hilfe.")
     
+    @require_authorized_user
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send a message when the command /help is issued."""
         help_text = """
@@ -309,6 +382,7 @@ class EnhancedCalendarBot:
             reply_markup=get_back_to_menu_keyboard()
         )
 
+    @require_authorized_user
     async def echo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages - check for appointment input from menu."""
         logger.info(f"Received message: '{update.message.text}' from user {update.effective_user.id}")

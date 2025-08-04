@@ -461,13 +461,18 @@ def create_email_processor_from_config(
 if __name__ == "__main__":
     # Test the email processor
     import os
+    import sys
     from dotenv import load_dotenv
     
     load_dotenv()
     
-    # Test configuration
-    test_email = os.getenv('EMAIL_ADDRESS', 'test@gmail.com')
-    test_password = os.getenv('EMAIL_PASSWORD', 'test_password')
+    # Test configuration - environment variables required
+    test_email = os.getenv('EMAIL_ADDRESS')
+    test_password = os.getenv('EMAIL_PASSWORD')
+    
+    if not test_email or not test_password:
+        print("Error: EMAIL_ADDRESS and EMAIL_PASSWORD environment variables must be set")
+        sys.exit(1)
     
     processor = create_email_processor_from_config(
         email_address=test_email,

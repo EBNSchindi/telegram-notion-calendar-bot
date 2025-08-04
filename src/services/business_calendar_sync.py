@@ -518,26 +518,5 @@ def create_sync_manager_from_env() -> BusinessCalendarSyncManager:
     return BusinessCalendarSyncManager(global_config)
 
 
-if __name__ == "__main__":
-    # Test the business calendar sync
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    
-    from config.user_config import UserConfig
-    
-    # Test configuration
-    test_user_config = UserConfig(
-        telegram_user_id=123456789,
-        telegram_username="test_user",
-        notion_api_key="test_api_key",
-        notion_database_id="test_db_id",
-        shared_notion_api_key="shared_api_key",
-        shared_notion_database_id="shared_db_id"
-    )
-    
-    sync_manager = create_sync_manager_from_env()
-    sync_manager.add_user(test_user_config)
-    
-    print("Business Calendar Sync Manager created successfully")
-    print(f"Configuration: {sync_manager.global_config}")
+# Test code has been removed to avoid hardcoded credentials in production.
+# For testing, use proper test fixtures in the tests/ directory.

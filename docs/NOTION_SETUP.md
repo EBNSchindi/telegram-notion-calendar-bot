@@ -346,6 +346,68 @@ Für **automatische E-Mail-Synchronisation**:
 
 ---
 
+## 🔒 Security Considerations
+
+### API Key Security
+
+1. **Separate API Keys per User**
+   - Never share API keys between users
+   - Use unique integration names for audit trails
+   - Rotate keys regularly (every 90 days recommended)
+
+2. **Environment Variables**
+   - Store API keys in environment variables, not code
+   - Use `.env` file with restricted permissions (chmod 600)
+   - Never commit `.env` files to version control
+
+3. **Database Access Control**
+   - Only share databases with necessary integrations
+   - Use read-only permissions where possible
+   - Regularly audit database sharing settings
+
+### User Authorization
+
+1. **Whitelist Configuration**
+   ```env
+   ALLOWED_USER_IDS=123456789,987654321  # Only these Telegram users can access
+   ```
+
+2. **Multi-User Isolation**
+   - Each user should only access their own databases
+   - Shared databases should have limited fields
+   - Business databases should be read-only for most users
+
+3. **Connection Security**
+   - All Notion API calls use HTTPS
+   - Connection pooling prevents auth timeouts
+   - Rate limiting prevents abuse
+
+### Data Protection
+
+1. **Sensitive Information**
+   - Don't store passwords or secrets in Notion
+   - Use description fields carefully
+   - Consider data retention policies
+
+2. **Backup Strategy**
+   - Regular Notion workspace backups
+   - Export critical data periodically
+   - Test restore procedures
+
+### Monitoring & Auditing
+
+1. **Access Logs**
+   - Monitor bot logs for unauthorized access attempts
+   - Review Notion integration activity
+   - Set up alerts for suspicious patterns
+
+2. **Regular Reviews**
+   - Audit user permissions quarterly
+   - Remove inactive users promptly
+   - Update integration scopes as needed
+
+---
+
 ## 📊 Datenbank-Properties im Detail
 
 ### Erforderliche Properties

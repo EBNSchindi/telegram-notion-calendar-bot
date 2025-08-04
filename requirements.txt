@@ -6,7 +6,6 @@ python-dotenv==1.0.1
 notion-client==2.2.1
 
 # Date and time handling
-python-dateutil==2.8.2
 pytz==2024.1
 
 # Data validation
@@ -16,12 +15,6 @@ pydantic==2.5.3
 openai==1.97.0
 
 # Testing and development dependencies moved to requirements-dev.txt
-
-# Utilities
-aiohttp==3.9.3
-
-# Email processing
-email-validator==2.1.1
 
 # Security
 cryptography==42.0.5

@@ -1,7 +1,7 @@
 """Rate limiting utilities for bot commands."""
 import time
 import logging
-from typing import Dict, List
+from typing import Dict, List, Callable, Any
 from functools import wraps
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -78,17 +78,25 @@ class RateLimiter:
 _rate_limiter = RateLimiter(max_requests=30, time_window=60)  # 30 requests per minute
 
 
-def rate_limit(max_requests: int = None, time_window: int = None):
+def rate_limit(max_requests: int = None, time_window: int = None) -> Callable[[Callable], Callable]:
     """
     Decorator to add rate limiting to bot command handlers.
     
     Args:
-        max_requests: Override default max requests
-        time_window: Override default time window
+        max_requests: Override default max requests (default: 30)
+        time_window: Override default time window in seconds (default: 60)
+        
+    Returns:
+        Decorator function that applies rate limiting to the wrapped handler
+        
+    Example:
+        @rate_limit(max_requests=10, time_window=60)  # 10 requests per minute
+        async def my_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+            # Handler code here
     """
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        async def wrapper(self: Any, update: Update, context: ContextTypes.DEFAULT_TYPE, *args: Any, **kwargs: Any) -> Any:
             user_id = update.effective_user.id
             
             # Use custom rate limiter if parameters are provided

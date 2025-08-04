@@ -58,10 +58,6 @@ class MemoHandler:
         keyboard = [[InlineKeyboardButton("🔙 Zurück zum Hauptmenü", callback_data="back_to_menu")]]
         return InlineKeyboardMarkup(keyboard)
     
-    def is_memo_service_available(self) -> bool:
-        """Check if memo service is available."""
-        return self.memo_service is not None
-    
     @rate_limit(max_requests=AI_RATE_LIMIT_REQUESTS, time_window=AI_RATE_LIMIT_WINDOW)
     async def show_recent_memos(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show the most recent memos (only unchecked ones by default)."""
@@ -448,9 +444,36 @@ class MemoHandler:
             await self.handle_memo_check_callback(update, context, page_id)
         elif query.data == "cancel_memo":
             context.user_data['awaiting_memo'] = False
-            from src.handlers.enhanced_appointment_handler import EnhancedAppointmentHandler
-            handler = EnhancedAppointmentHandler(self.user_config)
-            await handler.show_main_menu(update, context)
+            # Return to main menu without circular import
+            await self._return_to_main_menu(update, context)
+    
+    async def _return_to_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Return to main menu without circular import."""
+        keyboard = [
+            [InlineKeyboardButton("📅 Termine verwalten", callback_data="list_appointments")],
+            [InlineKeyboardButton("➕ Neuen Termin erstellen", callback_data="create_appointment")],
+            [InlineKeyboardButton("🔄 Terminerinnerungen", callback_data="check_reminders")],
+            [InlineKeyboardButton("📝 Memos", callback_data="memo_menu")],
+            [InlineKeyboardButton("📨 Business-Kalender", callback_data="sync_business_calendar")],
+            [InlineKeyboardButton("🔍 Debug-Menü", callback_data="debug_menu")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.message.edit_text(
+                "🤖 *Telegram Notion Bot - Hauptmenü*\n\n"
+                "Wähle eine Option:",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "🤖 *Telegram Notion Bot - Hauptmenü*\n\n"
+                "Wähle eine Option:",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
     
     def is_memo_service_available(self) -> bool:
         """Check if memo service is available."""
